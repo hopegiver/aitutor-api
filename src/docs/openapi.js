@@ -11,7 +11,7 @@ export const openApiSpec = {
   },
   servers: [
     {
-      url: "https://aitutor-api.your-domain.workers.dev",
+      url: "https://aitutor.apiserver.kr",
       description: "Production server"
     },
     {

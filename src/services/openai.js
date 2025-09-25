@@ -28,6 +28,9 @@ export class OpenAIService {
   async streamChat(messages, options = {}) {
     const maxTokens = options.maxTokens || 500;
 
+    // API 키 확인 로깅 (보안을 위해 앞 4글자만)
+    console.log('API Key check:', this.apiKey ? `${this.apiKey.substring(0, 4)}...` : 'MISSING');
+
     // AI Tutor 모드로 메시지에 튜터 안내 추가 (원본 배열 수정 방지를 위해 복사)
     const messagesWithGuidance = this.addTutorGuidance([...messages], maxTokens);
 
@@ -47,7 +50,14 @@ export class OpenAIService {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      const errorBody = await response.text();
+      console.error('OpenAI API Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      throw new Error(`OpenAI API error: ${response.status} - ${errorBody}`);
     }
 
     return response.body;
