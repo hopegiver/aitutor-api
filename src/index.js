@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import chat from './routes/chat.js';
-import tutor from './routes/tutor.js';
+import quiz from './routes/quiz.js';
+import docs from './routes/docs.js';
 
 const app = new Hono();
 
@@ -12,6 +13,11 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
 }));
 
+// Root redirect to docs
+app.get('/', (c) => {
+  return c.redirect('/docs');
+});
+
 // Health check
 app.get('/health', (c) => {
   return c.json({
@@ -21,9 +27,12 @@ app.get('/health', (c) => {
   });
 });
 
-// Routes
+// Documentation
+app.route('/docs', docs);
+
+// API Routes
 app.route('/v1/chat', chat);
-app.route('/v1/tutor', tutor);
+app.route('/v1/quiz', quiz);
 
 // 404 handler
 app.notFound((c) => {

@@ -16,5 +16,6 @@ vars = { ENVIRONMENT = "production" }
 name = "aitutor-api-dev"
 vars = { ENVIRONMENT = "development" }
 
-# Secrets (set via: wrangler secret put OPENAI_API_KEY)
+# For development, you can use .env file or wrangler dev --var
+# For production, use: wrangler secret put OPENAI_API_KEY
 # OPENAI_API_KEY = "your-api-key"
