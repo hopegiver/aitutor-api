@@ -4,17 +4,24 @@ compatibility_date = "2024-01-01"
 
 # Environment variables (set these in Cloudflare dashboard or via wrangler secrets)
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
 # Production environment
 [env.production]
-name = "aitutor-api-prod"
+name = "aitutor-api"
 vars = { ENVIRONMENT = "production" }
 
 # Development environment
 [env.development]
 name = "aitutor-api-dev"
 vars = { ENVIRONMENT = "development" }
+
+# wrangler.toml (wrangler v3.88.0^)
+[observability.logs]
+enabled = true
+
+[placement]
+mode = "smart"
 
 # For development, you can use .env file or wrangler dev --var
 # For production, use: wrangler secret put OPENAI_API_KEY

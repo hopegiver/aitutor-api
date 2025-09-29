@@ -20,10 +20,32 @@ app.get('/', (c) => {
 
 // Health check
 app.get('/health', (c) => {
+  const cf = c.req.cf || {};
+  const headers = {};
+
+  // Collect all CF headers
+  c.req.raw.headers.forEach((value, key) => {
+    if (key.toLowerCase().startsWith('cf-')) {
+      headers[key] = value;
+    }
+  });
+
   return c.json({
     status: 'ok',
     version: 'v1',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    region: {
+      country: cf.country || 'unknown',
+      region: cf.region || 'unknown',
+      city: cf.city || 'unknown',
+      datacenter: cf.colo || 'unknown',
+      timezone: cf.timezone || 'unknown',
+      latitude: cf.latitude || 'unknown',
+      longitude: cf.longitude || 'unknown'
+    },
+    cfHeaders: headers,
+    environment: c.env?.ENVIRONMENT || 'unknown',
+    allCfData: cf
   });
 });
 

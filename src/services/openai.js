@@ -1,7 +1,7 @@
 export class OpenAIService {
   constructor(apiKey) {
     this.apiKey = apiKey;
-    this.baseUrl = 'https://api.openai.com/v1';
+    this.baseUrl = 'https://malgn-openai.openai.azure.com/';
   }
 
   // AI Tutor용 시스템 메시지 추가
@@ -34,14 +34,13 @@ export class OpenAIService {
     // AI Tutor 모드로 메시지에 튜터 안내 추가 (원본 배열 수정 방지를 위해 복사)
     const messagesWithGuidance = this.addTutorGuidance([...messages], maxTokens);
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
+    const response = await fetch(`${this.baseUrl}openai/deployments/${options.model || 'gpt-4o-mini'}/chat/completions?api-version=2025-01-01-preview`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        'api-key': this.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: options.model || 'gpt-4o-mini',
         messages: messagesWithGuidance,
         stream: true,
         temperature: options.temperature || 0.7,
