@@ -2,6 +2,24 @@ name = "aitutor-api"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
+# KV Namespaces
+[[kv_namespaces]]
+binding = "TRANSCRIBE_KV"
+id = "transcribe_kv_id_placeholder"
+preview_id = "transcribe_kv_preview_id_placeholder"
+
+# Queues
+[[queues.producers]]
+queue = "transcribe-queue"
+binding = "TRANSCRIBE_QUEUE"
+
+[[queues.consumers]]
+queue = "transcribe-queue"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+dead_letter_queue = "transcribe-dlq"
+
 # Environment variables (set these in Cloudflare dashboard or via wrangler secrets)
 [vars]
 ENVIRONMENT = "production"
@@ -26,3 +44,7 @@ mode = "smart"
 # For development, you can use .env file or wrangler dev --var
 # For production, use: wrangler secret put OPENAI_API_KEY
 # OPENAI_API_KEY = "your-api-key"
+
+# Required secrets for transcription (use wrangler secret put):
+# - STREAM_API_TOKEN: Cloudflare Stream API token
+# - CLOUDFLARE_ACCOUNT_ID: Cloudflare account ID
