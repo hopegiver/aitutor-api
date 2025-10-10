@@ -1,9 +1,9 @@
 export class WhisperService {
-  constructor(apiKey, endpoint, apiVersion = '2025-01-01-preview') {
+  constructor(apiKey, endpoint, apiVersion = '2024-06-01') {
     this.apiKey = apiKey;
     this.endpoint = endpoint;
     this.apiVersion = apiVersion;
-    this.baseUrl = `${endpoint}/openai/deployments/whisper-1/audio/transcriptions`;
+    this.baseUrl = `${endpoint}/openai/deployments/whisper/audio/transcriptions`;
   }
 
   async transcribeFromUrl(audioUrl, options = {}) {
@@ -28,7 +28,7 @@ export class WhisperService {
     try {
       const formData = new FormData();
       formData.append('file', audioBlob, 'audio.mp3');
-      formData.append('model', 'whisper-1');
+      formData.append('model', 'whisper');
 
       if (options.language) {
         formData.append('language', options.language);

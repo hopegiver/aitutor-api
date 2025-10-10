@@ -4,9 +4,9 @@ compatibility_date = "2024-01-01"
 
 # KV Namespaces
 [[kv_namespaces]]
-binding = "TRANSCRIBE_KV"
-id = "transcribe_kv_id_placeholder"
-preview_id = "transcribe_kv_preview_id_placeholder"
+binding = "aitutor_kv"
+id = "602f4b0aa2c84d028ff510ab23be19b5"
+preview_id = "1f17a8a9139a44659a3ea6a8e74515f9"
 
 # Queues
 [[queues.producers]]

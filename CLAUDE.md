@@ -64,12 +64,19 @@ src/
 
 ## ⚙️ 설정 현황
 
-### Azure OpenAI 설정
+### Azure OpenAI 설정 (채팅용)
 - **Azure OpenAI** 사용 중
 - 엔드포인트: `https://malgn-openai.openai.azure.com/`
 - API 버전: `2025-01-01-preview`
 - 인증: `api-key` 헤더 방식
 - 기본 모델: `gpt-4o-mini`
+
+### Azure Cognitive Services (자막 추출용)
+- **Whisper** 사용 중
+- 엔드포인트: `https://info-mg6frpzu-eastus2.cognitiveservices.azure.com/`
+- API 버전: `2024-06-01`
+- 인증: `api-key` 헤더 방식
+- 모델: `whisper`
 
 ### Cloudflare Workers 설정
 - 프로덕션 이름: `aitutor-api`
@@ -81,9 +88,12 @@ src/
 ### 환경 변수 (Cloudflare Secrets)
 - `AUTH_SECRET_KEY`: 도메인 해시 검증용 (7k9mN2pQ5rT8uW1xZ4aB6cE9fH2jK5nP8qS1vY4zA7bD0eG3hJ6kM9pR2tU5wX8z)
 - `JWT_SECRET`: JWT 토큰 서명용 (F9mK2pS5vY8zA1dG4hJ7kN0qT3wX6bE9fH2jM5pR8uV1yB4cE7gJ0kN3qS6vY9z)
-- `OPENAI_API_KEY`: Azure OpenAI API 키
-- `STREAM_API_TOKEN`: Cloudflare Stream API 토큰 (구현 예정)
-- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 계정 ID (구현 예정)
+- `OPENAI_API_KEY`: Azure OpenAI API 키 (채팅용)
+- `WHISPER_API_KEY`: Azure Cognitive Services Whisper API 키 (자막 추출용)
+- `WHISPER_ENDPOINT`: Whisper 엔드포인트 URL
+- `WHISPER_API_VERSION`: Whisper API 버전
+- `STREAM_API_TOKEN`: Cloudflare Stream API 토큰
+- `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 계정 ID
 
 ## 🔐 인증 시스템
 
@@ -144,8 +154,19 @@ npm run build   # 빌드 테스트 (wrangler deploy --dry-run)
 # 시크릿 관리
 wrangler secret put AUTH_SECRET_KEY
 wrangler secret put JWT_SECRET
+wrangler secret put OPENAI_API_KEY
+wrangler secret put WHISPER_API_KEY
+wrangler secret put WHISPER_ENDPOINT
+wrangler secret put WHISPER_API_VERSION
+wrangler secret put STREAM_API_TOKEN
+wrangler secret put CLOUDFLARE_ACCOUNT_ID
 wrangler secret list
 wrangler tail   # 실시간 로그 확인
+
+# 테스트 명령어
+npm test                # 기본 테스트 러너
+npm run test:services   # 기본 유틸리티 테스트
+npm run test:all        # 모든 서비스 통합 테스트
 ```
 
 ## 📊 Git 상태

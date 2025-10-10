@@ -9,9 +9,9 @@ export class TranscribeConsumer {
     this.queueService = new QueueService(env.TRANSCRIBE_QUEUE);
     this.streamService = new StreamService(env.CLOUDFLARE_ACCOUNT_ID, env.STREAM_API_TOKEN);
     this.whisperService = new WhisperService(
-      env.OPENAI_API_KEY,
-      env.OPENAI_ENDPOINT || 'https://malgn-openai.openai.azure.com',
-      env.OPENAI_API_VERSION || '2025-01-01-preview'
+      env.WHISPER_API_KEY || env.OPENAI_API_KEY,
+      env.WHISPER_ENDPOINT || env.OPENAI_ENDPOINT || 'https://info-mg6frpzu-eastus2.cognitiveservices.azure.com',
+      env.WHISPER_API_VERSION || '2024-06-01'
     );
   }
 

@@ -2,16 +2,24 @@
   "name": "aitutor-api",
   "version": "1.0.0",
   "description": "AI Tutor API using Cloudflare Workers and OpenAI",
+  "type": "module",
   "main": "src/index.ts",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "build": "wrangler deploy --dry-run"
+    "build": "wrangler deploy --dry-run",
+    "test": "node test/runner.js",
+    "test:run": "node test/runner.js",
+    "test:services": "node test/test-services.js",
+    "test:all": "node test/test-all-services.js",
+    "test:whisper": "node test/whisper-endpoint-test.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241106.0",
     "wrangler": "^4.38.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0"
   },
   "dependencies": {
     "hono": "^3.11.0",
