@@ -473,9 +473,9 @@ export const openApiSpec = {
         }
       }
     },
-    "/v1/transcribe/upload-url": {
+    "/v1/content/upload-url": {
       post: {
-        tags: ["Transcribe"],
+        tags: ["Content"],
         summary: "Start video transcription",
         description: "Upload video URL for transcription processing (requires authentication)",
         security: [{ BearerAuth: [] }],
@@ -570,9 +570,9 @@ export const openApiSpec = {
         }
       }
     },
-    "/v1/transcribe/status/{jobId}": {
+    "/v1/content/status/{jobId}": {
       get: {
-        tags: ["Transcribe"],
+        tags: ["Content"],
         summary: "Get transcription job status",
         description: "Check the current status of a transcription job (requires authentication)",
         security: [{ BearerAuth: [] }],
@@ -650,9 +650,9 @@ export const openApiSpec = {
         }
       }
     },
-    "/v1/transcribe/result/{jobId}": {
+    "/v1/content/result/{jobId}": {
       get: {
-        tags: ["Transcribe"],
+        tags: ["Content"],
         summary: "Get transcription result",
         description: "Retrieve the completed transcription result (requires authentication)",
         security: [{ BearerAuth: [] }],
@@ -733,6 +733,195 @@ export const openApiSpec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          401: {
+            description: "Authentication required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/summary/{contentId}": {
+      get: {
+        tags: ["Content"],
+        summary: "Get content summary for chatbot integration",
+        description: "Retrieve AI-generated summary of transcribed content by content ID (requires authentication)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: "contentId",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              example: "a1b2c3d4e5f6789"
+            },
+            description: "Content ID (job ID from transcription)"
+          }
+        ],
+        responses: {
+          200: {
+            description: "Content summary retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        contentId: { type: "string", example: "a1b2c3d4e5f6789" },
+                        originalText: { type: "string", description: "Full original transcription text" },
+                        summary: { type: "string", description: "AI-generated educational summary" },
+                        language: { type: "string", example: "ko" },
+                        duration: { type: "number", example: 120.5 },
+                        videoUrl: { type: "string", format: "uri" },
+                        createdAt: { type: "string", format: "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            description: "Content summary not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          401: {
+            description: "Authentication required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/subtitle/{contentId}": {
+      get: {
+        tags: ["Content"],
+        summary: "Get content subtitle segments",
+        description: "Retrieve transcription segments with timestamps by content ID (requires authentication)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: "contentId",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              example: "a1b2c3d4e5f6789"
+            },
+            description: "Content ID (job ID from transcription)"
+          }
+        ],
+        responses: {
+          200: {
+            description: "Content subtitle retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        contentId: { type: "string", example: "a1b2c3d4e5f6789" },
+                        language: { type: "string", example: "ko" },
+                        duration: { type: "number", example: 120.5 },
+                        segments: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              start: { type: "number", example: 0.0 },
+                              end: { type: "number", example: 3.38 },
+                              text: { type: "string", example: "이제는 온라인과 때려야 뗄 수 없는 우리의 삶" }
+                            }
+                          }
+                        },
+                        format: { type: "string", example: "vtt" },
+                        content: { type: "string", description: "Formatted subtitle content (VTT/SRT)" },
+                        source: { type: "string", example: "cloudflare-stream-ai" },
+                        videoUrl: { type: "string", format: "uri" },
+                        createdAt: { type: "string", format: "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          404: {
+            description: "Content subtitle not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          401: {
+            description: "Authentication required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/contents": {
+      get: {
+        tags: ["Content"],
+        summary: "List available content infos",
+        description: "Get a list of all available content metadata and summary previews (requires authentication)",
+        security: [{ BearerAuth: [] }],
+        responses: {
+          200: {
+            description: "Content summaries list retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        contents: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              contentId: { type: "string", example: "a1b2c3d4e5f6789" },
+                              language: { type: "string", example: "ko" },
+                              duration: { type: "number", example: 120.5 },
+                              videoUrl: { type: "string", format: "uri" },
+                              createdAt: { type: "string", format: "date-time" },
+                              summaryPreview: { type: "string", description: "First 200 characters of the summary" }
+                            }
+                          }
+                        },
+                        total: { type: "integer", example: 5 }
+                      }
+                    }
+                  }
+                }
               }
             }
           },

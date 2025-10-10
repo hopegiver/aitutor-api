@@ -54,7 +54,7 @@ chat.post('/simple', async (c) => {
     if (systemPrompt) {
       messages.push({ role: 'system', content: systemPrompt });
     }
-    messages.push({ role: 'user', content: message });
+    messages.push({ role: 'user', content: sanitizeInput(message) });
 
     validateOptions(options);
 

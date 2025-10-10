@@ -35,12 +35,15 @@
   - 요청: `{ topic: "...", difficulty: "intermediate", type: "multiple-choice", questionCount: 5, options: {...} }`
   - 응답: JSON 형식 퀴즈 (제목, 난이도, 문제들)
 
-### 자막 추출 API (`/v1/transcribe`) - **JWT 인증 필수** (구현 예정)
-- `POST /v1/transcribe/from-url` - MP4 URL에서 자막 추출
+### 콘텐츠 API (`/v1/content`) - **JWT 인증 필수**
+- `POST /v1/content/upload-url` - MP4 URL에서 자막 추출 및 AI 요약
   - 요청: `{ videoUrl: "...", language: "ko-KR" }`
   - 응답: 작업 ID + 상태 확인 URL
-- `GET /v1/transcribe/status/:jobId` - 자막 추출 진행 상황
-- `GET /v1/transcribe/result/:jobId` - 자막 추출 결과
+- `GET /v1/content/status/:jobId` - 자막 추출 진행 상황
+- `GET /v1/content/result/:jobId` - 자막 추출 결과
+- `GET /v1/content/summary/:contentId` - AI 요약된 콘텐츠 조회
+- `GET /v1/content/subtitle/:contentId` - 원본 자막 내용 조회
+- `GET /v1/content/contents` - 모든 콘텐츠 목록 조회
 
 ### 문서
 - `/docs` - API 문서 (Swagger 스타일)

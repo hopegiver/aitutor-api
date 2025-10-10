@@ -4,7 +4,7 @@ import chat from './routes/chat.js';
 import quiz from './routes/quiz.js';
 import docs from './routes/docs.js';
 import auth from './routes/auth.js';
-import transcribe from './routes/transcribe.js';
+import content from './routes/content.js';
 import { AuthService } from './utils/auth.js';
 import { createErrorResponse } from './utils/responses.js';
 import handleQueue from './services/transcribe-consumer.js';
@@ -116,7 +116,7 @@ app.route('/docs', docs);
 app.route('/v1/auth', auth);
 app.route('/v1/chat', chat);
 app.route('/v1/quiz', quiz);
-app.route('/v1/transcribe', transcribe);
+app.route('/v1/content', content);
 
 // 404 handler
 app.notFound((c) => {
@@ -129,7 +129,8 @@ app.onError((err, c) => {
   return c.json({ error: 'Internal Server Error' }, 500);
 });
 
-export default app;
 
-// Queue consumer export for Cloudflare Workers
-export { handleQueue as queue };
+export default {
+  fetch: app.fetch,
+  queue: handleQueue
+};

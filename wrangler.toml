@@ -8,10 +8,15 @@ binding = "AITUTOR_KV"
 id = "602f4b0aa2c84d028ff510ab23be19b5"
 preview_id = "1353f14d278843499f1e390cdea59b53"
 
-# Queues (Producer only - Consumer will be implemented later)
+# Queues (Producer and Consumer)
 [[queues.producers]]
 queue = "transcribe-queue"
 binding = "TRANSCRIBE_QUEUE"
+
+[[queues.consumers]]
+queue = "transcribe-queue"
+max_batch_size = 10
+max_batch_timeout = 5
 
 # Environment variables (set these in Cloudflare dashboard or via wrangler secrets)
 [vars]
