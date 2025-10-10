@@ -49,7 +49,7 @@ transcribe.post('/upload-url', async (c) => {
       }
     };
 
-    await c.env.TRANSCRIBE_KV.put(`job:${jobId}`, JSON.stringify(jobData));
+    await c.env.AITUTOR_KV.put(`transcribe:job:${jobId}`, JSON.stringify(jobData));
 
     await c.env.TRANSCRIBE_QUEUE.send({
       jobId,
@@ -77,7 +77,7 @@ transcribe.get('/status/:jobId', async (c) => {
       return c.json(createErrorResponse('Job ID is required', 400), 400);
     }
 
-    const jobDataStr = await c.env.TRANSCRIBE_KV.get(`job:${jobId}`);
+    const jobDataStr = await c.env.AITUTOR_KV.get(`transcribe:job:${jobId}`);
 
     if (!jobDataStr) {
       return c.json(createErrorResponse('Job not found', 404), 404);
@@ -108,7 +108,7 @@ transcribe.get('/result/:jobId', async (c) => {
       return c.json(createErrorResponse('Job ID is required', 400), 400);
     }
 
-    const jobDataStr = await c.env.TRANSCRIBE_KV.get(`job:${jobId}`);
+    const jobDataStr = await c.env.AITUTOR_KV.get(`transcribe:job:${jobId}`);
 
     if (!jobDataStr) {
       return c.json(createErrorResponse('Job not found', 404), 404);

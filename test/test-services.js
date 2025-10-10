@@ -1,9 +1,10 @@
 /**
- * Direct Service Testing
- * Tests individual services and utilities directly
+ * AI Tutor API - Core Service Tests
+ * Tests core services and utilities for AI Gateway integration
  */
 
 import { OpenAIService } from '../src/services/openai.js';
+import { WhisperService } from '../src/services/whisper.js';
 import { AuthService } from '../src/utils/auth.js';
 import { validateChatMessages, validateOptions, sanitizeInput } from '../src/utils/validation.js';
 import { createErrorResponse, createSSEResponse } from '../src/utils/responses.js';
@@ -42,29 +43,40 @@ function assertThrows(fn, expectedMessage) {
   }
 }
 
-console.log('🧪 Testing Services and Utils\n');
+console.log('🧪 AI Tutor API - Core Service Tests\n');
 
-// OpenAI Service Tests
-console.log('📦 OpenAI Service Tests');
+// OpenAI Service Tests (AI Gateway)
+console.log('📦 OpenAI Service Tests (AI Gateway)');
 
-test('OpenAIService constructor', () => {
-  const service = new OpenAIService('test-key', null);
+test('OpenAIService constructor with valid params', () => {
+  const service = new OpenAIService('test-key', 'test-account-id');
   assertEqual(service.apiKey, 'test-key');
-  assertEqual(service.baseUrl, 'https://malgn-openai.openai.azure.com/');
+  assertEqual(service.baseUrl, 'https://gateway.ai.cloudflare.com/v1/test-account-id/aitutor/openai');
+});
+
+test('OpenAIService constructor throws without API key', () => {
+  assertThrows(() => new OpenAIService(null, 'test-account-id'), 'API key and Cloudflare account ID are required');
+});
+
+test('OpenAIService constructor throws without account ID', () => {
+  assertThrows(() => new OpenAIService('test-key', null), 'API key and Cloudflare account ID are required');
 });
 
 test('addTutorGuidance adds system message when none exists', () => {
-  const service = new OpenAIService('test-key', null);
+  const service = new OpenAIService('test-key', 'test-account-id');
   const messages = [{ role: 'user', content: 'Hello' }];
   const result = service.addTutorGuidance(messages);
 
   assertEqual(result.length, 2);
   assertEqual(result[0].role, 'system');
   assertEqual(result[1].role, 'user');
+  if (!result[0].content.includes('AI tutor')) {
+    throw new Error('System message should include tutor guidance');
+  }
 });
 
 test('addTutorGuidance modifies existing system message', () => {
-  const service = new OpenAIService('test-key', null);
+  const service = new OpenAIService('test-key', 'test-account-id');
   const messages = [
     { role: 'system', content: 'You are helpful.' },
     { role: 'user', content: 'Hello' }
@@ -76,6 +88,37 @@ test('addTutorGuidance modifies existing system message', () => {
   if (!result[0].content.includes('As an AI tutor')) {
     throw new Error('System message should include tutor guidance');
   }
+});
+
+// Whisper Service Tests (AI Gateway)
+console.log('\n📦 Whisper Service Tests (AI Gateway)');
+
+test('WhisperService constructor with valid params', () => {
+  const service = new WhisperService('test-key', 'test-account-id');
+  assertEqual(service.apiKey, 'test-key');
+  assertEqual(service.baseUrl, 'https://gateway.ai.cloudflare.com/v1/test-account-id/aitutor/openai');
+});
+
+test('WhisperService constructor throws without API key', () => {
+  assertThrows(() => new WhisperService(null, 'test-account-id'), 'API key and Cloudflare account ID are required');
+});
+
+test('WhisperService constructor throws without account ID', () => {
+  assertThrows(() => new WhisperService('test-key', null), 'API key and Cloudflare account ID are required');
+});
+
+test('WhisperService SRT time formatting', () => {
+  const service = new WhisperService('test-key', 'test-account-id');
+  assertEqual(service.formatSRTTime(0), '00:00:00,000');
+  assertEqual(service.formatSRTTime(65.5), '00:01:05,500');
+  assertEqual(service.formatSRTTime(3661.123), '01:01:01,123');
+});
+
+test('WhisperService VTT time formatting', () => {
+  const service = new WhisperService('test-key', 'test-account-id');
+  assertEqual(service.formatVTTTime(0), '00:00:00.000');
+  assertEqual(service.formatVTTTime(65.5), '00:01:05.500');
+  assertEqual(service.formatVTTTime(3661.123), '01:01:01.123');
 });
 
 // Auth Service Tests

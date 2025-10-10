@@ -1,27 +1,21 @@
 import OpenAI from 'openai';
 
 export class WhisperService {
-  constructor(apiKey, endpoint, apiVersion = '2024-06-01', accountId = null) {
-    this.apiKey = apiKey;
-    this.endpoint = endpoint;
-    this.apiVersion = apiVersion;
-
-    // AI Gateway 설정 (하드코딩된 gateway ID 'aitutor' 사용)
-    if (accountId && apiKey && !apiKey.startsWith('1fQ')) {
-      // Cloudflare AI Gateway를 통한 OpenAI Whisper 접근
-      this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/aitutor/openai`;
-      this.isAzure = false;
-
-      // OpenAI 클라이언트 초기화 (Whisper용)
-      this.client = new OpenAI({
-        apiKey: this.apiKey,
-        baseURL: this.baseUrl,
-      });
-    } else {
-      // 기존 Azure Cognitive Services 엔드포인트 (fallback)
-      this.baseUrl = `${endpoint}/openai/deployments/whisper/audio/transcriptions`;
-      this.isAzure = true;
+  constructor(apiKey, accountId) {
+    if (!apiKey || !accountId) {
+      throw new Error('OpenAI API key and Cloudflare account ID are required');
     }
+
+    this.apiKey = apiKey;
+
+    // Cloudflare AI Gateway를 통한 OpenAI Whisper 접근 (하드코딩된 gateway ID 'aitutor' 사용)
+    this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/aitutor/openai`;
+
+    // OpenAI 클라이언트 초기화 (Whisper용)
+    this.client = new OpenAI({
+      apiKey: this.apiKey,
+      baseURL: this.baseUrl,
+    });
   }
 
   async transcribeFromUrl(audioUrl, options = {}) {
@@ -37,79 +31,35 @@ export class WhisperService {
       return await this.transcribeFromBlob(audioBlob, options);
 
     } catch (error) {
-      console.error('Error transcribing from URL:', error);
+      console.error('Transcription from URL failed:', error.message);
       throw error;
     }
   }
 
   async transcribeFromBlob(audioBlob, options = {}) {
     try {
-      console.log('Using AI Gateway for Whisper:', !this.isAzure);
+      const transcriptionOptions = {
+        file: audioBlob,
+        model: 'whisper-1',
+        response_format: options.format || 'verbose_json'
+      };
 
-      if (!this.isAzure && this.client) {
-        // Cloudflare AI Gateway를 통한 OpenAI Whisper 호출
-        const transcriptionOptions = {
-          file: audioBlob,
-          model: 'whisper-1',
-          response_format: options.format || 'verbose_json'
-        };
-
-        if (options.language) {
-          transcriptionOptions.language = options.language;
-        }
-
-        if (options.timestamps !== false) {
-          transcriptionOptions.timestamp_granularities = ['segment'];
-          if (options.wordTimestamps) {
-            transcriptionOptions.timestamp_granularities.push('word');
-          }
-        }
-
-        const result = await this.client.audio.transcriptions.create(transcriptionOptions);
-        return this.formatTranscriptionResult(result, options);
-
-      } else {
-        // Azure Cognitive Services 기존 방식 (fallback)
-        const formData = new FormData();
-        formData.append('file', audioBlob, 'audio.mp3');
-        formData.append('model', 'whisper');
-
-        if (options.language) {
-          formData.append('language', options.language);
-        }
-
-        if (options.format) {
-          formData.append('response_format', options.format);
-        } else {
-          formData.append('response_format', 'verbose_json');
-        }
-
-        if (options.timestamps !== false) {
-          formData.append('timestamp_granularities[]', 'segment');
-          if (options.wordTimestamps) {
-            formData.append('timestamp_granularities[]', 'word');
-          }
-        }
-
-        const response = await fetch(`${this.baseUrl}?api-version=${this.apiVersion}`, {
-          method: 'POST',
-          headers: {
-            'api-key': this.apiKey
-          },
-          body: formData
-        });
-
-        if (!response.ok) {
-          const errorData = await response.text();
-          throw new Error(`Azure Whisper API error: ${response.status} ${errorData}`);
-        }
-
-        const result = await response.json();
-        return this.formatTranscriptionResult(result, options);
+      if (options.language) {
+        transcriptionOptions.language = options.language;
       }
 
+      if (options.timestamps !== false) {
+        transcriptionOptions.timestamp_granularities = ['segment'];
+        if (options.wordTimestamps) {
+          transcriptionOptions.timestamp_granularities.push('word');
+        }
+      }
+
+      const result = await this.client.audio.transcriptions.create(transcriptionOptions);
+      return this.formatTranscriptionResult(result, options);
+
     } catch (error) {
-      console.error('Error transcribing audio:', error);
+      console.error('Audio transcription failed:', error.message);
       throw error;
     }
   }

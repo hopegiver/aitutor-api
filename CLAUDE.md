@@ -162,6 +162,8 @@ src/
 - ✅ 모든 라우트 (chat, quiz, transcribe) AI Gateway 설정 적용
 - ✅ 실시간 테스트 완료 - AI Gateway 정상 작동 확인
 - ✅ 단위 테스트 코드 추가 및 transcribe 라우트 버그 수정
+- ✅ AI Gateway ID 'aitutor' 하드코딩으로 설정 간소화
+- ✅ 환경 변수에서 AI_GATEWAY_ID 제거 및 보안 강화
 
 ## 🛠️ 개발 명령어
 ```bash
@@ -190,11 +192,14 @@ npm run test:all        # 모든 서비스 통합 테스트
 ## 📊 Git 상태
 - 현재 브랜치: master
 - 작업 디렉토리: 깨끗함
-- 모든 인증 관련 변경사항 커밋 완료
+- 최신 커밋: f1e8aef - AI Gateway ID 하드코딩 및 설정 간소화
+- 모든 AI Gateway 통합 변경사항 커밋 완료
 
 ## 🎯 아키텍처 특징
 - **중앙 집중식 인증**: index.js에서 모든 보호된 라우트 인증 처리
 - **도메인 기반 보안**: SHA256 해시를 통한 도메인별 인증키 시스템
+- **AI Gateway 통합**: Cloudflare AI Gateway 우선 사용, Azure fallback 지원
+- **하드코딩된 Gateway ID**: 'aitutor' 고정으로 설정 간소화
 - **비동기 처리**: Queue 기반 긴 작업 처리 (자막 추출 등)
 - **에러 격리**: 각 엔드포인트 독립적 try-catch
 - **스트리밍 중심**: SSE 방식 실시간 응답
@@ -207,9 +212,11 @@ npm run test:all        # 모든 서비스 통합 테스트
 - ✅ 도메인 기반 JWT 인증 시스템 완료
 - ✅ 인증키 발행 시스템 완료
 - ✅ API 문서 시스템 (Swagger UI)
-- ✅ Azure OpenAI 통합
+- ✅ Cloudflare AI Gateway 통합 (OpenAI/Whisper)
+- ✅ Azure OpenAI fallback 시스템
 - ✅ Cloudflare Workers 배포 설정
 - ✅ 중앙 집중식 보안 아키텍처
+- ✅ 포괄적 단위 테스트 시스템
 - ⏳ 동영상 자막 추출 시스템 (구현 예정)
 
 ## 🚀 다음 구현 계획
