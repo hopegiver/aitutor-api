@@ -611,7 +611,7 @@ export const openApiSpec = {
                           properties: {
                             stage: { type: "string", example: "transcribing" },
                             percentage: { type: "integer", minimum: 0, maximum: 100, example: 75 },
-                            message: { type: "string", example: "Transcribing audio with Whisper" }
+                            message: { type: "string", example: "Generating AI captions with Cloudflare Stream" }
                           }
                         },
                         createdAt: { type: "string", format: "date-time" },

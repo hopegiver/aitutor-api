@@ -5,6 +5,7 @@ import quiz from './routes/quiz.js';
 import docs from './routes/docs.js';
 import auth from './routes/auth.js';
 import content from './routes/content.js';
+import testVectorize from './routes/test-vectorize.js';
 import { AuthService } from './utils/auth.js';
 import { createErrorResponse } from './utils/responses.js';
 import handleQueue from './services/transcribe-consumer.js';
@@ -117,6 +118,7 @@ app.route('/v1/auth', auth);
 app.route('/v1/chat', chat);
 app.route('/v1/quiz', quiz);
 app.route('/v1/content', content);
+app.route('/v1/test-vectorize', testVectorize);
 
 // 404 handler
 app.notFound((c) => {

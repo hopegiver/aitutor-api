@@ -1,14 +1,23 @@
 import OpenAI from 'openai';
 
 export class OpenAIService {
-  constructor(apiKey, accountId) {
-    if (!apiKey || !accountId) {
+  constructor(env) {
+    // env 객체 또는 기존 방식 모두 지원
+    if (typeof env === 'object' && env !== null) {
+      this.apiKey = env.OPENAI_API_KEY;
+      this.accountId = env.CLOUDFLARE_ACCOUNT_ID;
+    } else {
+      // 기존 방식 (테스트용)
+      this.apiKey = arguments[0];
+      this.accountId = arguments[1];
+    }
+
+    if (!this.apiKey || !this.accountId) {
       throw new Error('OpenAI API key and Cloudflare account ID are required');
     }
 
     // Cloudflare AI Gateway를 통한 OpenAI 접근 (하드코딩된 gateway ID 'aitutor' 사용)
-    this.apiKey = apiKey;
-    this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${accountId}/aitutor/openai`;
+    this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${this.accountId}/aitutor/openai`;
 
     // OpenAI 클라이언트 초기화
     this.client = new OpenAI({
@@ -109,5 +118,37 @@ export class OpenAIService {
     };
 
     return this.streamChat([systemMessage, userMessage], options);
+  }
+
+  async createChatCompletion(options = {}) {
+    try {
+      const response = await this.client.chat.completions.create({
+        model: options.model || 'gpt-4o-mini',
+        messages: options.messages,
+        temperature: options.temperature || 0.7,
+        max_tokens: options.max_tokens || 500,
+        stream: false
+      });
+
+      return response;
+    } catch (error) {
+      console.error('OpenAI Chat Completion error:', error.message);
+      throw new Error(`OpenAI Chat Completion error: ${error.message}`);
+    }
+  }
+
+  async createEmbedding(options = {}) {
+    try {
+      const response = await this.client.embeddings.create({
+        model: options.model || 'text-embedding-3-small',
+        input: options.input,
+        encoding_format: options.encoding_format || 'float'
+      });
+
+      return response;
+    } catch (error) {
+      console.error('OpenAI Embedding error:', error.message);
+      throw new Error(`OpenAI Embedding error: ${error.message}`);
+    }
   }
 }

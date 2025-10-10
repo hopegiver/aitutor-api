@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { validateInput } from '../utils/validation.js';
 import { createErrorResponse, createSuccessResponse } from '../utils/responses.js';
+import { VectorizeService } from '../services/vectorize.js';
+import { OpenAIService } from '../services/openai.js';
 
 const content = new Hono();
 
@@ -295,6 +297,88 @@ content.get('/contents', async (c) => {
   } catch (error) {
     console.error('Error listing content infos:', error);
     return c.json(createErrorResponse('Failed to list contents', 500), 500);
+  }
+});
+
+// Search content using vectorized search
+const searchSchema = z.object({
+  query: z.string().min(1, 'Search query is required'),
+  topK: z.number().min(1).max(50).optional().default(10),
+  contentId: z.string().optional(), // Filter by specific content
+  type: z.enum(['transcript', 'summary']).optional(), // Filter by content type
+  language: z.string().optional() // Filter by language
+});
+
+content.get('/search', async (c) => {
+  try {
+    const query = c.req.query('query');
+    const topK = parseInt(c.req.query('topK')) || 10;
+    const contentId = c.req.query('contentId');
+    const type = c.req.query('type');
+    const language = c.req.query('language');
+
+    const validatedData = validateInput(searchSchema, {
+      query,
+      topK,
+      contentId,
+      type,
+      language
+    });
+
+    if (!validatedData.success) {
+      return c.json(createErrorResponse('Validation failed', 400), 400);
+    }
+
+    const { query: searchQuery, ...searchOptions } = validatedData.data;
+
+    // Initialize services
+    const openaiService = new OpenAIService(c.env);
+    const vectorizeService = new VectorizeService(
+      c.env.CONTENT_VECTORIZE,
+      openaiService
+    );
+
+    // Perform search
+    const searchResults = await vectorizeService.searchContent(searchQuery, searchOptions);
+
+    return c.json(createSuccessResponse({
+      query: searchQuery,
+      results: searchResults.results,
+      total: searchResults.total,
+      options: searchOptions
+    }));
+
+  } catch (error) {
+    console.error('Error searching content:', error);
+    return c.json(createErrorResponse('Failed to search content', 500), 500);
+  }
+});
+
+// Get content context for AI chat (used internally by chat routes)
+content.post('/context', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { query, maxChunks = 5 } = body;
+
+    if (!query || typeof query !== 'string') {
+      return c.json(createErrorResponse('Query is required', 400), 400);
+    }
+
+    // Initialize services
+    const openaiService = new OpenAIService(c.env);
+    const vectorizeService = new VectorizeService(
+      c.env.CONTENT_VECTORIZE,
+      openaiService
+    );
+
+    // Get content context
+    const contextResult = await vectorizeService.getContentContext(query, maxChunks);
+
+    return c.json(createSuccessResponse(contextResult));
+
+  } catch (error) {
+    console.error('Error getting content context:', error);
+    return c.json(createErrorResponse('Failed to get content context', 500), 500);
   }
 });
 

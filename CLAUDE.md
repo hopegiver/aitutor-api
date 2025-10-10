@@ -2,8 +2,8 @@
 
 ## 📊 프로젝트 개요
 - **이름**: AI Tutor API
-- **기술 스택**: Hono + Cloudflare Workers + AI Gateway (OpenAI/Azure) + Cloudflare Stream + Queues
-- **목적**: 스트리밍 방식 AI 채팅, 퀴즈 생성, 동영상 자막 추출 API
+- **기술 스택**: Hono + Cloudflare Workers + AI Gateway (OpenAI) + Cloudflare Stream AI + Vectorize + Queues
+- **목적**: 의미기반 검색 통합 AI 채팅, 퀴즈 생성, 동영상 자막 추출 및 콘텐츠 검색 API
 
 ## 🔗 실제 구현된 API 엔드포인트
 
@@ -19,13 +19,13 @@
   - 요청: `{ domain: "...", password: "..." }`
   - 응답: 생성된 인증키
 
-### 채팅 API (`/v1/chat`) - **JWT 인증 필수**
-- `POST /v1/chat/` - 메시지 배열 기반 스트리밍 채팅
+### 채팅 API (`/v1/chat`) - **JWT 인증 필수** + **벡터 검색 통합**
+- `POST /v1/chat/` - 메시지 배열 기반 스트리밍 채팅 (강의 내용 자동 검색)
   - 요청: `{ messages: [...], options: {...} }`
-  - 응답: SSE 스트림
-- `POST /v1/chat/simple` - 단순 메시지 + 시스템 프롬프트
+  - 응답: SSE 스트림 (관련 강의 콘텍스트 포함)
+- `POST /v1/chat/simple` - 단순 메시지 + 시스템 프롬프트 (강의 내용 자동 검색)
   - 요청: `{ message: "...", systemPrompt: "...", options: {...} }`
-  - 응답: SSE 스트림
+  - 응답: SSE 스트림 (관련 강의 콘텍스트 포함)
 
 ### 퀴즈 API (`/v1/quiz`) - **JWT 인증 필수**
 - `POST /v1/quiz/` - 기본 퀴즈 생성
@@ -35,15 +35,21 @@
   - 요청: `{ topic: "...", difficulty: "intermediate", type: "multiple-choice", questionCount: 5, options: {...} }`
   - 응답: JSON 형식 퀴즈 (제목, 난이도, 문제들)
 
-### 콘텐츠 API (`/v1/content`) - **JWT 인증 필수**
-- `POST /v1/content/upload-url` - MP4 URL에서 자막 추출 및 AI 요약
+### 콘텐츠 API (`/v1/content`) - **JWT 인증 필수** + **Vectorize 검색 기능**
+- `POST /v1/content/upload-url` - MP4 URL에서 자막 추출, AI 요약, 벡터 인덱싱
   - 요청: `{ videoUrl: "...", language: "ko-KR" }`
   - 응답: 작업 ID + 상태 확인 URL
-- `GET /v1/content/status/:jobId` - 자막 추출 진행 상황
-- `GET /v1/content/result/:jobId` - 자막 추출 결과
+- `GET /v1/content/status/:contentId` - 자막 추출 진행 상황
+- `GET /v1/content/result/:contentId` - 자막 추출 결과
 - `GET /v1/content/summary/:contentId` - AI 요약된 콘텐츠 조회
 - `GET /v1/content/subtitle/:contentId` - 원본 자막 내용 조회
 - `GET /v1/content/contents` - 모든 콘텐츠 목록 조회
+- `GET /v1/content/search` - 의미기반 콘텐츠 검색 (Vectorize)
+  - 요청: `?query=..&topK=10&contentId=..&type=..&language=..`
+  - 응답: 유사도 점수 기반 검색 결과
+- `POST /v1/content/context` - AI 채팅용 콘텍스트 추출 (내부 API)
+  - 요청: `{ query: "...", maxChunks: 5 }`
+  - 응답: 관련 콘텍스트 + 메타데이터
 
 ### 문서
 - `/docs` - API 문서 (Swagger 스타일)
@@ -76,15 +82,12 @@ src/
   - API 버전: `2025-01-01-preview`
   - 인증: `api-key` 헤더 방식
 
-### Whisper 설정 (자막 추출용) - AI Gateway 통합
-- **Cloudflare AI Gateway** 우선 사용
-- Gateway 엔드포인트: `https://gateway.ai.cloudflare.com/v1/{account_id}/aitutor/openai`
-- OpenAI Whisper 모델: `whisper-1`
-- **Fallback**: Azure Cognitive Services
-  - 엔드포인트: `https://info-mg6frpzu-eastus2.cognitiveservices.azure.com/`
-  - API 버전: `2024-06-01`
-  - 인증: `api-key` 헤더 방식
-  - 모델: `whisper`
+### Cloudflare Stream AI Caption 설정 (자막 추출용)
+- **Cloudflare Stream AI** 사용 (Whisper 대체)
+- AI 자막 생성 API: `{stream_endpoint}/{video_id}/captions/{language}/generate`
+- 지원 언어: `ko`, `en`, `ja`, `zh`, `es`, `fr`, `de` 등
+- VTT 형식 자막 생성 및 SRT/JSON 변환 지원
+- 비용 효율적이고 빠른 처리 속도
 
 ### Cloudflare Workers 설정
 - 프로덕션 이름: `aitutor-api`
@@ -95,17 +98,19 @@ src/
 
 ### 환경 변수 (Cloudflare Secrets)
 - `AUTH_SECRET_KEY`: 도메인 해시 검증용 (7k9mN2pQ5rT8uW1xZ4aB6cE9fH2jK5nP8qS1vY4zA7bD0eG3hJ6kM9pR2tU5wX8z)
-- `JWT_SECRET`: JWT 토큰 서명용 (F9mK2pS5vY8zA1dG4hJ7kN0qT3wX6bE9fH2jM5pR8uV1yB4cE7gJ0kN3qS6vY9z)
-- `OPENAI_API_KEY`: OpenAI API 키 (AI Gateway 우선 사용)
-- `AZURE_OPENAI_API_KEY`: Azure OpenAI API 키 (fallback)
-- `AZURE_OPENAI_ENDPOINT`: Azure OpenAI 엔드포인트 (fallback)
-- `AZURE_OPENAI_API_VERSION`: Azure OpenAI API 버전 (fallback)
-- `WHISPER_API_KEY`: Azure Cognitive Services Whisper API 키 (fallback)
-- `WHISPER_ENDPOINT`: Whisper 엔드포인트 URL (fallback)
-- `WHISPER_API_VERSION`: Whisper API 버전 (fallback)
-- `AI_GATEWAY_ID`: Cloudflare AI Gateway ID (하드코딩: 'aitutor')
+- `JWT_SECRET`: JWT 토큰 서명용 (F9mK2pS5vY8zA1dG4hJ7kN0qT3wX6bE9fH2jK5nP8qS1vY4zA7bD0eG3hJ6kM9pR2tU5wX8z)
+- `OPENAI_API_KEY`: OpenAI API 키 (AI Gateway 전용)
 - `STREAM_API_TOKEN`: Cloudflare Stream API 토큰
 - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 계정 ID
+
+**제거된 환경 변수** (Whisper/Azure 관련):
+- ~~`WHISPER_API_KEY`~~ - Cloudflare Stream AI로 대체됨
+- ~~`WHISPER_ENDPOINT`~~ - Cloudflare Stream AI로 대체됨
+- ~~`WHISPER_API_VERSION`~~ - Cloudflare Stream AI로 대체됨
+- ~~`AZURE_OPENAI_API_KEY`~~ - AI Gateway 전용으로 변경됨
+- ~~`AZURE_OPENAI_ENDPOINT`~~ - AI Gateway 전용으로 변경됨
+- ~~`AZURE_OPENAI_API_VERSION`~~ - AI Gateway 전용으로 변경됨
+- ~~`AI_GATEWAY_ID`~~ - 하드코딩됨 ('aitutor')
 
 ## 🔐 인증 시스템
 
@@ -157,6 +162,18 @@ src/
 - ✅ OpenAPI 서버 URL: `https://aitutor.apiserver.kr`
 - ✅ 실제 배포 URL과 일치
 
+### Cloudflare Vectorize 콘텐츠 검색 시스템 구현 (완료)
+- ✅ VectorizeService 구현 - 의미기반 콘텐츠 저장 및 검색
+- ✅ OpenAI text-embedding-3-small 모델 통합
+- ✅ 스마트 콘텐츠 청킹 - 문장 경계 기반 500자 단위
+- ✅ 자막 원본 + AI 요약 벡터 인덱싱
+- ✅ 시간대 메타데이터 포함 (VTT 타임스탬프)
+- ✅ 콘텐츠 검색 API 엔드포인트 추가
+- ✅ 채팅 라우트에 벡터 검색 자동 통합
+- ✅ 관련도 임계값 기반 컴텍스트 필터링 (0.7+)
+- ✅ wrangler.toml Vectorize 바인딩 설정
+- ✅ 전체 시스템 빌드 테스트 완료
+
 ### Cloudflare AI Gateway 통합 (완료)
 - ✅ OpenAI JavaScript 라이브러리 설치 및 통합
 - ✅ OpenAI/Whisper 서비스에 AI Gateway 지원 추가
@@ -178,9 +195,6 @@ npm run build   # 빌드 테스트 (wrangler deploy --dry-run)
 wrangler secret put AUTH_SECRET_KEY
 wrangler secret put JWT_SECRET
 wrangler secret put OPENAI_API_KEY
-wrangler secret put WHISPER_API_KEY
-wrangler secret put WHISPER_ENDPOINT
-wrangler secret put WHISPER_API_VERSION
 wrangler secret put STREAM_API_TOKEN
 wrangler secret put CLOUDFLARE_ACCOUNT_ID
 wrangler secret list
@@ -201,26 +215,29 @@ npm run test:all        # 모든 서비스 통합 테스트
 ## 🎯 아키텍처 특징
 - **중앙 집중식 인증**: index.js에서 모든 보호된 라우트 인증 처리
 - **도메인 기반 보안**: SHA256 해시를 통한 도메인별 인증키 시스템
-- **AI Gateway 통합**: Cloudflare AI Gateway 우선 사용, Azure fallback 지원
-- **하드코딩된 Gateway ID**: 'aitutor' 고정으로 설정 간소화
-- **비동기 처리**: Queue 기반 긴 작업 처리 (자막 추출 등)
+- **AI Gateway 통합**: Cloudflare AI Gateway 전용 (Azure fallback 제거)
+- **의미기반 검색**: Vectorize + OpenAI Embedding 기반 콘텐츠 검색
+- **스마트 채팅**: 사용자 질문에 맞는 강의 콘텐츠 자동 검색 및 컴텍스트 제공
+- **비동기 처리**: Queue 기반 긴 작업 처리 (자막 추출 + 벡터 인덱싱)
 - **에러 격리**: 각 엔드포인트 독립적 try-catch
 - **스트리밍 중심**: SSE 방식 실시간 응답
 - **입력 검증**: XSS 방지, 타입 검증
 - **CORS 지원**: 웹앱에서 직접 호출 가능
 
 ## 📋 현재 완료 상태
-- ✅ 기본 채팅 API 구현
+- ✅ 의미기반 검색 통합 채팅 API 구현 (강의 콘텍스트 자동 제공)
 - ✅ 퀴즈 생성 API 구현
 - ✅ 도메인 기반 JWT 인증 시스템 완료
 - ✅ 인증키 발행 시스템 완료
 - ✅ API 문서 시스템 (Swagger UI)
-- ✅ Cloudflare AI Gateway 통합 (OpenAI/Whisper)
-- ✅ Azure OpenAI fallback 시스템
-- ✅ Cloudflare Workers 배포 설정
+- ✅ Cloudflare AI Gateway 통합 (OpenAI 전용)
+- ✅ Cloudflare Stream AI Caption 시스템 (Whisper 대체)
+- ✅ Cloudflare Vectorize 콘텐츠 검색 시스템
+- ✅ AI 콘텐츠 요약 및 벡터 인덱싱 자동화
+- ✅ 동영상 자막 추출 완전 자동화 시스템
+- ✅ Cloudflare Workers 배포 설정 (KV + Queue + Vectorize)
 - ✅ 중앙 집중식 보안 아키텍처
 - ✅ 포괄적 단위 테스트 시스템
-- ⏳ 동영상 자막 추출 시스템 (구현 예정)
 
 ## 🚀 다음 구현 계획
 1. **Cloudflare Stream 통합**: MP4 URL 업로드 기능

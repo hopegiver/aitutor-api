@@ -2,6 +2,7 @@ import { KVService } from './kv.js';
 import { QueueService } from './queue.js';
 import { StreamService } from './stream.js';
 import { OpenAIService } from './openai.js';
+import { VectorizeService } from './vectorize.js';
 
 export class TranscribeConsumer {
   constructor(env) {
@@ -9,9 +10,11 @@ export class TranscribeConsumer {
     this.queueService = new QueueService(env.TRANSCRIBE_QUEUE);
     this.streamService = new StreamService(env.CLOUDFLARE_ACCOUNT_ID, env.STREAM_API_TOKEN);
 
-    this.openaiService = new OpenAIService(
-      env.OPENAI_API_KEY,
-      env.CLOUDFLARE_ACCOUNT_ID
+    this.openaiService = new OpenAIService(env);
+
+    this.vectorizeService = new VectorizeService(
+      env.CONTENT_VECTORIZE,
+      this.openaiService
     );
   }
 
@@ -106,7 +109,7 @@ export class TranscribeConsumer {
       const captionContent = await this.streamService.getCaptionContent(streamUid, streamLanguage);
 
       // Convert VTT to requested format if needed
-      const finalContent = await this.convertCaptionFormat(captionContent.content, contentData.options.format || 'vtt');
+      const finalContent = await this.convertCaptionFormat(captionContent.content, contentData.options?.format || 'vtt');
 
       await this.kvService.updateContentProgress(contentId, 'summarizing', 90, 'Generating AI content summary');
 
@@ -120,7 +123,7 @@ export class TranscribeConsumer {
         language: captionContent.language,
         duration: this.extractDurationFromVTT(captionContent.content),
         segments: this.convertVTTToSegments(captionContent.content),
-        format: contentData.options.format || 'vtt',
+        format: contentData.options?.format || 'vtt',
         content: finalContent,
         source: 'cloudflare-stream-ai'
       };
@@ -155,7 +158,7 @@ export class TranscribeConsumer {
         segments: this.convertVTTToSegments(captionContent.content),
         language: captionContent.language,
         duration: this.extractDurationFromVTT(captionContent.content),
-        format: contentData.options.format || 'vtt',
+        format: contentData.options?.format || 'vtt',
         content: finalContent,
         source: 'cloudflare-stream-ai',
         videoUrl: contentData.videoUrl,
@@ -174,7 +177,33 @@ export class TranscribeConsumer {
         createdAt: new Date().toISOString()
       });
 
+      // Index content in Vectorize for search
+      await this.kvService.updateContentProgress(contentId, 'indexing', 95, 'Indexing content for search');
+
+      try {
+        const vectorMetadata = {
+          language: captionContent.language,
+          duration: this.extractDurationFromVTT(captionContent.content),
+          videoUrl: contentData.videoUrl,
+          source: 'cloudflare-stream-ai'
+        };
+
+        const indexResult = await this.vectorizeService.indexContent(
+          contentId,
+          plainText,
+          summary,
+          this.convertVTTToSegments(captionContent.content),
+          vectorMetadata
+        );
+
+        console.log(`✅ Vectorize indexing completed:`, indexResult);
+      } catch (vectorError) {
+        console.error(`❌ Failed to index content in Vectorize:`, vectorError);
+        // Don't fail the entire process if vectorization fails
+      }
+
       console.log(`Content ${contentId} completed successfully with Stream AI captions`);
+      await this.kvService.updateContentProgress(contentId, 'completed', 100, 'Content processing completed');
 
     } catch (error) {
       console.error(`Error generating Stream captions for content ${contentId}:`, error);

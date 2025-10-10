@@ -29,26 +29,6 @@ export class KVService {
     return updatedContent;
   }
 
-  async updateContentProgress(contentId, stage, percentage, message) {
-    const contentData = await this.getContent(contentId);
-    if (!contentData) {
-      throw new Error(`Content ${contentId} not found`);
-    }
-
-    const updatedContent = {
-      ...contentData,
-      progress: {
-        stage,
-        percentage,
-        message
-      },
-      updatedAt: new Date().toISOString()
-    };
-
-    await this.setContent(contentId, updatedContent);
-    return updatedContent;
-  }
-
   async setContentResult(contentId, result, metadata = {}) {
     const contentData = await this.getContent(contentId);
     if (!contentData) {
@@ -214,5 +194,25 @@ export class KVService {
     }
 
     return infos;
+  }
+
+  async updateContentProgress(contentId, stage, percentage, message) {
+    const contentData = await this.getContentInfo(contentId);
+    if (!contentData) {
+      throw new Error(`Content ${contentId} not found`);
+    }
+
+    const updatedContent = {
+      ...contentData,
+      progress: {
+        stage,
+        percentage,
+        message
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.setContentInfo(contentId, updatedContent);
+    return updatedContent;
   }
 }

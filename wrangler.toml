@@ -8,6 +8,11 @@ binding = "AITUTOR_KV"
 id = "602f4b0aa2c84d028ff510ab23be19b5"
 preview_id = "1353f14d278843499f1e390cdea59b53"
 
+# Vectorize Indexes
+[[vectorize]]
+binding = "CONTENT_VECTORIZE"
+index_name = "content-search"
+
 # Queues (Producer and Consumer)
 [[queues.producers]]
 queue = "transcribe-queue"

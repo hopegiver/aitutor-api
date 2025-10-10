@@ -30,7 +30,7 @@ quiz.post('/', async (c) => {
     }
 
     // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
-    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID);
+    const openai = new OpenAIService(c.env);
     const stream = await openai.createQuiz(sanitizedTopic, count, options);
     const parsedStream = parseSSEStream(stream);
 
@@ -90,7 +90,7 @@ quiz.post('/generate', async (c) => {
     };
 
     // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
-    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID);
+    const openai = new OpenAIService(c.env);
     const stream = await openai.streamChat([systemMessage, userMessage], options);
     const parsedStream = parseSSEStream(stream);
 
