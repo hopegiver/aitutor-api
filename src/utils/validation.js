@@ -78,3 +78,15 @@ export function sanitizeInput(input) {
     .replace(/javascript:/gi, '') // Remove javascript: protocol
     .trim();
 }
+
+export function validateInput(schema, data) {
+  try {
+    const result = schema.parse(data);
+    return { success: true, data: result };
+  } catch (error) {
+    return {
+      success: false,
+      errors: error.errors || [{ message: error.message }]
+    };
+  }
+}

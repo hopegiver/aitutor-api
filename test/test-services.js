@@ -48,13 +48,13 @@ console.log('🧪 Testing Services and Utils\n');
 console.log('📦 OpenAI Service Tests');
 
 test('OpenAIService constructor', () => {
-  const service = new OpenAIService('test-key');
+  const service = new OpenAIService('test-key', null);
   assertEqual(service.apiKey, 'test-key');
   assertEqual(service.baseUrl, 'https://malgn-openai.openai.azure.com/');
 });
 
 test('addTutorGuidance adds system message when none exists', () => {
-  const service = new OpenAIService('test-key');
+  const service = new OpenAIService('test-key', null);
   const messages = [{ role: 'user', content: 'Hello' }];
   const result = service.addTutorGuidance(messages);
 
@@ -64,7 +64,7 @@ test('addTutorGuidance adds system message when none exists', () => {
 });
 
 test('addTutorGuidance modifies existing system message', () => {
-  const service = new OpenAIService('test-key');
+  const service = new OpenAIService('test-key', null);
   const messages = [
     { role: 'system', content: 'You are helpful.' },
     { role: 'user', content: 'Hello' }

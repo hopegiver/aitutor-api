@@ -29,8 +29,15 @@ quiz.post('/', async (c) => {
       return c.json(createErrorResponse('OpenAI API key not configured'), 500);
     }
 
-    // Process with OpenAI
-    const openai = new OpenAIService(c.env.OPENAI_API_KEY);
+    // Azure OpenAI 설정 (fallback)
+    const azureConfig = {
+      apiKey: c.env.AZURE_OPENAI_API_KEY,
+      endpoint: c.env.AZURE_OPENAI_ENDPOINT,
+      apiVersion: c.env.AZURE_OPENAI_API_VERSION
+    };
+
+    // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
+    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID, azureConfig);
     const stream = await openai.createQuiz(sanitizedTopic, count, options);
     const parsedStream = parseSSEStream(stream);
 
@@ -89,7 +96,15 @@ quiz.post('/generate', async (c) => {
       content: `Create ${count} ${difficulty} level ${type} questions about: ${sanitizedTopic}`
     };
 
-    const openai = new OpenAIService(c.env.OPENAI_API_KEY);
+    // Azure OpenAI 설정 (fallback)
+    const azureConfig = {
+      apiKey: c.env.AZURE_OPENAI_API_KEY,
+      endpoint: c.env.AZURE_OPENAI_ENDPOINT,
+      apiVersion: c.env.AZURE_OPENAI_API_VERSION
+    };
+
+    // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
+    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID, azureConfig);
     const stream = await openai.streamChat([systemMessage, userMessage], options);
     const parsedStream = parseSSEStream(stream);
 

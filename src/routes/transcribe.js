@@ -21,7 +21,7 @@ transcribe.post('/upload-url', async (c) => {
     const validatedData = validateInput(uploadUrlSchema, body);
 
     if (!validatedData.success) {
-      return createErrorResponse(c, 'Validation failed', validatedData.errors, 400);
+      return c.json(createErrorResponse('Validation failed', 400), 400);
     }
 
     const { videoUrl, language, options } = validatedData.data;
@@ -56,16 +56,16 @@ transcribe.post('/upload-url', async (c) => {
       action: 'process_video'
     });
 
-    return createSuccessResponse(c, {
+    return c.json(createSuccessResponse({
       jobId,
       status: 'queued',
       statusUrl: `/v1/transcribe/status/${jobId}`,
       resultUrl: `/v1/transcribe/result/${jobId}`
-    });
+    }));
 
   } catch (error) {
     console.error('Error creating transcribe job:', error);
-    return createErrorResponse(c, 'Failed to create transcribe job', null, 500);
+    return c.json(createErrorResponse('Failed to create transcribe job', 500), 500);
   }
 });
 
@@ -74,29 +74,29 @@ transcribe.get('/status/:jobId', async (c) => {
     const { jobId } = c.req.param();
 
     if (!jobId) {
-      return createErrorResponse(c, 'Job ID is required', null, 400);
+      return c.json(createErrorResponse('Job ID is required', 400), 400);
     }
 
     const jobDataStr = await c.env.TRANSCRIBE_KV.get(`job:${jobId}`);
 
     if (!jobDataStr) {
-      return createErrorResponse(c, 'Job not found', null, 404);
+      return c.json(createErrorResponse('Job not found', 404), 404);
     }
 
     const jobData = JSON.parse(jobDataStr);
 
-    return createSuccessResponse(c, {
+    return c.json(createSuccessResponse({
       jobId: jobData.id,
       status: jobData.status,
       progress: jobData.progress,
       createdAt: jobData.createdAt,
       updatedAt: jobData.updatedAt,
       ...(jobData.status === 'failed' && { error: jobData.error })
-    });
+    }));
 
   } catch (error) {
     console.error('Error getting job status:', error);
-    return createErrorResponse(c, 'Failed to get job status', null, 500);
+    return c.json(createErrorResponse('Failed to get job status', 500), 500);
   }
 });
 
@@ -105,26 +105,26 @@ transcribe.get('/result/:jobId', async (c) => {
     const { jobId } = c.req.param();
 
     if (!jobId) {
-      return createErrorResponse(c, 'Job ID is required', null, 400);
+      return c.json(createErrorResponse('Job ID is required', 400), 400);
     }
 
     const jobDataStr = await c.env.TRANSCRIBE_KV.get(`job:${jobId}`);
 
     if (!jobDataStr) {
-      return createErrorResponse(c, 'Job not found', null, 404);
+      return c.json(createErrorResponse('Job not found', 404), 404);
     }
 
     const jobData = JSON.parse(jobDataStr);
 
     if (jobData.status !== 'completed') {
-      return createErrorResponse(c, `Job is not completed. Current status: ${jobData.status}`, null, 400);
+      return c.json(createErrorResponse(`Job is not completed. Current status: ${jobData.status}`, 400), 400);
     }
 
     if (!jobData.result) {
-      return createErrorResponse(c, 'Transcription result not available', null, 404);
+      return c.json(createErrorResponse('Transcription result not available', 404), 404);
     }
 
-    return createSuccessResponse(c, {
+    return c.json(createSuccessResponse({
       jobId: jobData.id,
       status: jobData.status,
       result: jobData.result,
@@ -135,11 +135,11 @@ transcribe.get('/result/:jobId', async (c) => {
         wordCount: jobData.metadata?.wordCount,
         completedAt: jobData.completedAt
       }
-    });
+    }));
 
   } catch (error) {
     console.error('Error getting transcribe result:', error);
-    return createErrorResponse(c, 'Failed to get transcribe result', null, 500);
+    return c.json(createErrorResponse('Failed to get transcribe result', 500), 500);
   }
 });
 

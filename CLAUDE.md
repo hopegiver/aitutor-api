@@ -2,7 +2,7 @@
 
 ## 📊 프로젝트 개요
 - **이름**: AI Tutor API
-- **기술 스택**: Hono + Cloudflare Workers + Azure OpenAI + Cloudflare Stream + Queues
+- **기술 스택**: Hono + Cloudflare Workers + AI Gateway (OpenAI/Azure) + Cloudflare Stream + Queues
 - **목적**: 스트리밍 방식 AI 채팅, 퀴즈 생성, 동영상 자막 추출 API
 
 ## 🔗 실제 구현된 API 엔드포인트
@@ -64,19 +64,24 @@ src/
 
 ## ⚙️ 설정 현황
 
-### Azure OpenAI 설정 (채팅용)
-- **Azure OpenAI** 사용 중
-- 엔드포인트: `https://malgn-openai.openai.azure.com/`
-- API 버전: `2025-01-01-preview`
-- 인증: `api-key` 헤더 방식
+### OpenAI 설정 (채팅용) - AI Gateway 통합
+- **Cloudflare AI Gateway** 우선 사용
+- Gateway 엔드포인트: `https://gateway.ai.cloudflare.com/v1/{account_id}/aitutor/openai`
+- OpenAI API 키 인증 방식
 - 기본 모델: `gpt-4o-mini`
+- **Fallback**: Azure OpenAI (`https://malgn-openai.openai.azure.com/`)
+  - API 버전: `2025-01-01-preview`
+  - 인증: `api-key` 헤더 방식
 
-### Azure Cognitive Services (자막 추출용)
-- **Whisper** 사용 중
-- 엔드포인트: `https://info-mg6frpzu-eastus2.cognitiveservices.azure.com/`
-- API 버전: `2024-06-01`
-- 인증: `api-key` 헤더 방식
-- 모델: `whisper`
+### Whisper 설정 (자막 추출용) - AI Gateway 통합
+- **Cloudflare AI Gateway** 우선 사용
+- Gateway 엔드포인트: `https://gateway.ai.cloudflare.com/v1/{account_id}/aitutor/openai`
+- OpenAI Whisper 모델: `whisper-1`
+- **Fallback**: Azure Cognitive Services
+  - 엔드포인트: `https://info-mg6frpzu-eastus2.cognitiveservices.azure.com/`
+  - API 버전: `2024-06-01`
+  - 인증: `api-key` 헤더 방식
+  - 모델: `whisper`
 
 ### Cloudflare Workers 설정
 - 프로덕션 이름: `aitutor-api`
@@ -88,10 +93,14 @@ src/
 ### 환경 변수 (Cloudflare Secrets)
 - `AUTH_SECRET_KEY`: 도메인 해시 검증용 (7k9mN2pQ5rT8uW1xZ4aB6cE9fH2jK5nP8qS1vY4zA7bD0eG3hJ6kM9pR2tU5wX8z)
 - `JWT_SECRET`: JWT 토큰 서명용 (F9mK2pS5vY8zA1dG4hJ7kN0qT3wX6bE9fH2jM5pR8uV1yB4cE7gJ0kN3qS6vY9z)
-- `OPENAI_API_KEY`: Azure OpenAI API 키 (채팅용)
-- `WHISPER_API_KEY`: Azure Cognitive Services Whisper API 키 (자막 추출용)
-- `WHISPER_ENDPOINT`: Whisper 엔드포인트 URL
-- `WHISPER_API_VERSION`: Whisper API 버전
+- `OPENAI_API_KEY`: OpenAI API 키 (AI Gateway 우선 사용)
+- `AZURE_OPENAI_API_KEY`: Azure OpenAI API 키 (fallback)
+- `AZURE_OPENAI_ENDPOINT`: Azure OpenAI 엔드포인트 (fallback)
+- `AZURE_OPENAI_API_VERSION`: Azure OpenAI API 버전 (fallback)
+- `WHISPER_API_KEY`: Azure Cognitive Services Whisper API 키 (fallback)
+- `WHISPER_ENDPOINT`: Whisper 엔드포인트 URL (fallback)
+- `WHISPER_API_VERSION`: Whisper API 버전 (fallback)
+- `AI_GATEWAY_ID`: Cloudflare AI Gateway ID (하드코딩: 'aitutor')
 - `STREAM_API_TOKEN`: Cloudflare Stream API 토큰
 - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare 계정 ID
 
@@ -109,7 +118,7 @@ src/
 - **보안**: 디버깅 코드 모두 제거 완료
 
 ### 등록된 도메인
-- **localhost**: 개발용 (ca8e4d2f9b7a1c6e5d3f8a2b4c7e9f1a3b6c8d5e2f4a7b9c1d6e8f2a5b7c9e1d3f)
+- **localhost**: 개발용 (a42b99ea2316b06e20baa93f4700a884b032f70ae878eca2260ca632342b5a37)
 - **hopegiver.malgn.co.kr**: 프로덕션용 (8b3f9d2a7c1e5b8f4a6d9c2e7b1a4f8c3d6b9e2a5c8f1b4e7a9d2c5f8b1e4a7c3d6)
 
 ## 🎬 자막 추출 시스템 (구현 예정)
@@ -144,6 +153,15 @@ src/
 ### 서버 URL 업데이트 (완료)
 - ✅ OpenAPI 서버 URL: `https://aitutor.apiserver.kr`
 - ✅ 실제 배포 URL과 일치
+
+### Cloudflare AI Gateway 통합 (완료)
+- ✅ OpenAI JavaScript 라이브러리 설치 및 통합
+- ✅ OpenAI/Whisper 서비스에 AI Gateway 지원 추가
+- ✅ Azure OpenAI fallback 시스템 구현
+- ✅ 환경 변수 분리 (OpenAI vs Azure OpenAI)
+- ✅ 모든 라우트 (chat, quiz, transcribe) AI Gateway 설정 적용
+- ✅ 실시간 테스트 완료 - AI Gateway 정상 작동 확인
+- ✅ 단위 테스트 코드 추가 및 transcribe 라우트 버그 수정
 
 ## 🛠️ 개발 명령어
 ```bash

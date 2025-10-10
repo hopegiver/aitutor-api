@@ -10,7 +10,7 @@ describe('OpenAIService', () => {
   const mockApiKey = 'test-api-key-1234567890';
 
   beforeEach(() => {
-    openaiService = new OpenAIService(mockApiKey);
+    openaiService = new OpenAIService(mockApiKey, null);
     // Reset all mocks
     vi.clearAllMocks();
   });

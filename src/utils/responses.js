@@ -6,6 +6,14 @@ export function createErrorResponse(message, status = 400, code = 'ERROR') {
   };
 }
 
+export function createSuccessResponse(data, status = 200) {
+  return {
+    success: true,
+    data,
+    timestamp: new Date().toISOString()
+  };
+}
+
 export function parseSSEStream(stream) {
   const reader = stream.getReader();
   const decoder = new TextDecoder('utf-8');

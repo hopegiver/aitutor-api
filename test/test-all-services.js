@@ -133,7 +133,7 @@ test('WhisperService constructor', () => {
   const apiKey = 'test-key';
   const endpoint = 'https://test.endpoint.com';
   const apiVersion = '2024-01-01';
-  const service = new WhisperService(apiKey, endpoint, apiVersion);
+  const service = new WhisperService(apiKey, endpoint, apiVersion, null);
 
   assertEqual(service.apiKey, apiKey);
   assertEqual(service.endpoint, endpoint);
@@ -142,7 +142,7 @@ test('WhisperService constructor', () => {
 });
 
 test('WhisperService SRT time formatting', () => {
-  const service = new WhisperService('key', 'endpoint');
+  const service = new WhisperService('key', 'endpoint', '2024-06-01', null);
 
   assertEqual(service.formatSRTTime(0), '00:00:00,000');
   assertEqual(service.formatSRTTime(65.5), '00:01:05,500');
@@ -150,7 +150,7 @@ test('WhisperService SRT time formatting', () => {
 });
 
 test('WhisperService VTT time formatting', () => {
-  const service = new WhisperService('key', 'endpoint');
+  const service = new WhisperService('key', 'endpoint', '2024-06-01', null);
 
   assertEqual(service.formatVTTTime(0), '00:00:00.000');
   assertEqual(service.formatVTTTime(65.5), '00:01:05.500');
@@ -158,7 +158,7 @@ test('WhisperService VTT time formatting', () => {
 });
 
 test('WhisperService SRT conversion', () => {
-  const service = new WhisperService('key', 'endpoint');
+  const service = new WhisperService('key', 'endpoint', '2024-06-01', null);
   const segments = [
     { start: 0, end: 2.5, text: 'Hello there' },
     { start: 3.0, end: 5.8, text: 'How are you?' }
@@ -171,7 +171,7 @@ test('WhisperService SRT conversion', () => {
 });
 
 test('WhisperService VTT conversion', () => {
-  const service = new WhisperService('key', 'endpoint');
+  const service = new WhisperService('key', 'endpoint', '2024-06-01', null);
   const segments = [
     { start: 0, end: 2.5, text: 'Hello there' }
   ];
@@ -206,13 +206,13 @@ test('TranscribeConsumer language mapping', () => {
 console.log('\n📦 OpenAI Service Tests');
 
 test('OpenAIService constructor', () => {
-  const service = new OpenAIService('test-key');
+  const service = new OpenAIService('test-key', null);
   assertEqual(service.apiKey, 'test-key');
   assertEqual(service.baseUrl, 'https://malgn-openai.openai.azure.com/');
 });
 
 test('addTutorGuidance adds system message when none exists', () => {
-  const service = new OpenAIService('test-key');
+  const service = new OpenAIService('test-key', null);
   const messages = [{ role: 'user', content: 'Hello' }];
   const result = service.addTutorGuidance(messages);
 

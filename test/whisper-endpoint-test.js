@@ -9,6 +9,7 @@ import { WhisperService } from '../src/services/whisper.js';
 const whisperApiKey = process.env.WHISPER_API_KEY || 'YOUR_WHISPER_API_KEY_HERE';
 const whisperEndpoint = process.env.WHISPER_ENDPOINT || 'https://info-mg6frpzu-eastus2.cognitiveservices.azure.com';
 const whisperApiVersion = process.env.WHISPER_API_VERSION || '2024-06-01';
+const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || null;
 
 console.log('🎤 Whisper Endpoint Test\n');
 
@@ -21,7 +22,7 @@ console.log(`- API Key: ${whisperApiKey ? whisperApiKey.substring(0, 8) + '...' 
 // WhisperService 초기화 테스트
 console.log('🔧 Service Initialization:');
 try {
-  const whisperService = new WhisperService(whisperApiKey, whisperEndpoint, whisperApiVersion);
+  const whisperService = new WhisperService(whisperApiKey, whisperEndpoint, whisperApiVersion, accountId);
 
   console.log(`✅ WhisperService created successfully`);
   console.log(`- Base URL: ${whisperService.baseUrl}`);
@@ -44,7 +45,7 @@ try {
 // 시간 포맷팅 테스트
 console.log('\n⏰ Time Formatting Tests:');
 try {
-  const whisperService = new WhisperService(whisperApiKey, whisperEndpoint, whisperApiVersion);
+  const whisperService = new WhisperService(whisperApiKey, whisperEndpoint, whisperApiVersion, accountId);
 
   // SRT 시간 포맷 테스트
   const srtTime = whisperService.formatSRTTime(65.5);
@@ -96,7 +97,7 @@ if (whisperApiKey && whisperEndpoint) {
   };
 
   try {
-    const whisperService = new WhisperService(whisperApiKey, whisperEndpoint, whisperApiVersion);
+    const whisperService = new WhisperService(whisperApiKey, whisperEndpoint, whisperApiVersion, accountId);
 
     // FormData 구성 테스트
     const mockBlob = new Blob(['test audio data'], { type: 'audio/mp3' });

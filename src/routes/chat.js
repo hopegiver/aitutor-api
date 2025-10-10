@@ -28,8 +28,15 @@ chat.post('/', async (c) => {
       return c.json(createErrorResponse('OpenAI API key not configured'), 500);
     }
 
-    // Process with OpenAI
-    const openai = new OpenAIService(c.env.OPENAI_API_KEY);
+    // Azure OpenAI 설정 (fallback)
+    const azureConfig = {
+      apiKey: c.env.AZURE_OPENAI_API_KEY,
+      endpoint: c.env.AZURE_OPENAI_ENDPOINT,
+      apiVersion: c.env.AZURE_OPENAI_API_VERSION
+    };
+
+    // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
+    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID, azureConfig);
     const stream = await openai.streamChat(sanitizedMessages, options);
     const parsedStream = parseSSEStream(stream);
 
@@ -63,8 +70,15 @@ chat.post('/simple', async (c) => {
       return c.json(createErrorResponse('OpenAI API key not configured'), 500);
     }
 
-    // Process with OpenAI
-    const openai = new OpenAIService(c.env.OPENAI_API_KEY);
+    // Azure OpenAI 설정 (fallback)
+    const azureConfig = {
+      apiKey: c.env.AZURE_OPENAI_API_KEY,
+      endpoint: c.env.AZURE_OPENAI_ENDPOINT,
+      apiVersion: c.env.AZURE_OPENAI_API_VERSION
+    };
+
+    // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
+    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID, azureConfig);
     const stream = await openai.streamChat(messages, options);
     const parsedStream = parseSSEStream(stream);
 

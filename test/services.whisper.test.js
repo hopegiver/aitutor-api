@@ -12,7 +12,7 @@ describe('WhisperService', () => {
   const mockApiVersion = '2025-01-01-preview';
 
   beforeEach(() => {
-    whisperService = new WhisperService(mockApiKey, mockEndpoint, mockApiVersion);
+    whisperService = new WhisperService(mockApiKey, mockEndpoint, mockApiVersion, null);
 
     // Mock global functions
     global.fetch = vi.fn();
@@ -40,7 +40,7 @@ describe('WhisperService', () => {
     });
 
     it('should use default API version when not provided', () => {
-      const service = new WhisperService(mockApiKey, mockEndpoint);
+      const service = new WhisperService(mockApiKey, mockEndpoint, '2024-06-01', null);
       expect(service.apiVersion).toBe('2025-01-01-preview');
     });
   });
