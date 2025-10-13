@@ -27,7 +27,7 @@ export class AuthService {
     const payload = {
       domain,
       iat: Math.floor(Date.now() / 1000), // issued at
-      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60), // 24시간 후 만료
+      exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60), // 7일 후 만료
       ...additionalInfo
     };
 

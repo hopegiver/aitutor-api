@@ -238,7 +238,13 @@ Guidelines:
 - IMPORTANT: Keep the summary under 400 words (approximately 500 tokens)
 - End with a complete sentence - do not cut off mid-sentence
 - Respond in ${language === 'ko' ? 'Korean' : 'English'} language
-- Structure your response with clear sections if the content covers multiple topics`
+- Structure your response with clear sections if the content covers multiple topics
+
+CRITICAL REQUIREMENTS for better searchability:
+- Start your summary with: ${language === 'ko' ? '"### 강의 내용 요약\\n\\n이 문서는 강의 영상의 핵심 내용을 요약한 자료입니다."' : '"### Lecture Content Summary\\n\\nThis document summarizes the key content from the lecture video."'}
+- Include relevant keywords naturally throughout the summary (e.g., "강의", "학습", "교육", "내용 요약" for Korean content)
+- Use phrases like ${language === 'ko' ? '"강의에서 다루는 주요 내용", "학습 포인트", "교육 자료 요약"' : '"main topics covered in the lecture", "learning points", "educational material summary"'}
+- Make sure the summary is easily discoverable when users search for terms like ${language === 'ko' ? '"강의 요약", "강의 내용", "학습 자료"' : '"lecture summary", "lecture content", "learning materials"'}`
       },
       {
         role: 'user',
@@ -293,7 +299,13 @@ Guidelines:
 - IMPORTANT: Keep the final summary under 400 words (approximately 500 tokens)
 - End with a complete sentence - do not cut off mid-sentence
 - Respond in ${language === 'ko' ? 'Korean' : 'English'} language
-- Use bullet points or numbered lists for clarity`
+- Use bullet points or numbered lists for clarity
+
+CRITICAL REQUIREMENTS for better searchability:
+- Start your final summary with: ${language === 'ko' ? '"### 강의 내용 요약\\n\\n이 문서는 강의 영상의 핵심 내용을 요약한 교육 자료입니다."' : '"### Lecture Content Summary\\n\\nThis document is an educational summary of the key content from the lecture video."'}
+- Include relevant keywords naturally throughout the summary (e.g., "강의", "학습", "교육", "내용 요약" for Korean content)
+- Use phrases like ${language === 'ko' ? '"강의에서 다루는 주요 내용", "학습 포인트", "교육 자료 요약"' : '"main topics covered in the lecture", "learning points", "educational material summary"'}
+- Make sure the summary is easily discoverable when users search for terms like ${language === 'ko' ? '"강의 요약", "강의 내용", "학습 자료"' : '"lecture summary", "lecture content", "learning materials"'}`
       },
       {
         role: 'user',

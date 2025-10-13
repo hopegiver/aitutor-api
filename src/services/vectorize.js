@@ -7,7 +7,7 @@ export class VectorizeService {
   /**
    * Create chunks based on segments with smart merging for optimal size
    */
-  createSegmentBasedChunks(segments, minChunkSize = 300, maxChunkSize = 800) {
+  createSegmentBasedChunks(segments, minChunkSize = 200, maxChunkSize = 500) {
     if (!segments || segments.length === 0) {
       return [];
     }
@@ -95,7 +95,7 @@ export class VectorizeService {
       const vectors = [];
 
       // Use segment-based chunking with smart merging for better timestamps
-      const transcriptChunks = this.createSegmentBasedChunks(segments, 300, 800);
+      const transcriptChunks = this.createSegmentBasedChunks(segments, 200, 500);
 
       for (let i = 0; i < transcriptChunks.length; i++) {
         const chunk = transcriptChunks[i];
@@ -190,7 +190,8 @@ export class VectorizeService {
 
       // Build filter conditions
       const filter = {};
-      if (contentId) filter.contentId = contentId;
+      // Temporarily disable contentId filtering until metadata index is fully active
+      // if (contentId) filter.contentId = contentId;
       if (type) filter.type = type;
       if (language) filter.language = language;
 
@@ -208,7 +209,7 @@ export class VectorizeService {
       const results = await this.vectorizeIndex.query(vectorArray, searchOptions);
 
       // Format results
-      const formattedResults = results.matches?.map(match => ({
+      let formattedResults = results.matches?.map(match => ({
         id: match.id,
         score: match.score,
         contentId: match.metadata?.contentId,
@@ -221,10 +222,23 @@ export class VectorizeService {
         createdAt: match.metadata?.createdAt
       })) || [];
 
+      // Client-side filtering as fallback (in case metadata index is not ready)
+      if (contentId && formattedResults.length > 0) {
+        console.log(`🔍 Filtering results by contentId: ${contentId}`);
+        console.log(`📊 Total results before filtering: ${formattedResults.length}`);
+        const filteredByContentId = formattedResults.filter(result => result.contentId === contentId);
+        console.log(`📊 Filtered results: ${filteredByContentId.length}`);
+        if (filteredByContentId.length > 0) {
+          formattedResults = filteredByContentId;
+        }
+        // If no results match contentId, keep all results (metadata filter might work)
+      }
+
       return {
         query,
         results: formattedResults,
-        total: formattedResults.length
+        total: formattedResults.length,
+        debug: contentId ? { requestedContentId: contentId, metadataFilterApplied: Object.keys(filter).length > 0 } : undefined
       };
 
     } catch (error) {
@@ -236,11 +250,13 @@ export class VectorizeService {
   /**
    * Get content context for AI chat
    */
-  async getContentContext(query, maxChunks = 5) {
+  async getContentContext(query, maxChunks = 3, searchOptions = {}) {
     try {
+      // Get more samples for score distribution analysis
       const searchResults = await this.searchContent(query, {
-        topK: maxChunks,
-        type: null // Include both transcript and summary
+        topK: 5, // Analyze 5 samples for better distribution analysis
+        type: null, // Include both transcript and summary
+        ...searchOptions
       });
 
       if (!searchResults.results || searchResults.results.length === 0) {
@@ -251,10 +267,30 @@ export class VectorizeService {
         };
       }
 
-      // Sort by relevance score and format context
+      // Dynamic relevance detection based on score distribution
+      const scores = searchResults.results.map(r => r.score);
+      const maxScore = Math.max(...scores);
+      const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+      const scoreGap = maxScore - avgScore;
+
+      console.log(`🎯 Score analysis: max=${maxScore.toFixed(3)}, avg=${avgScore.toFixed(3)}, gap=${scoreGap.toFixed(3)}`);
+
+      // Dynamic relevance criteria: meaningful score gap and minimum threshold
+      const isRelevant = scoreGap > 0.015 && maxScore > 0.3;
+
+      if (!isRelevant) {
+        console.log('❌ Content not relevant based on score distribution');
+        return {
+          hasContext: false,
+          context: '',
+          sources: []
+        };
+      }
+
+      // Use basic threshold for actual content selection (top 3)
       const relevantChunks = searchResults.results
-        .filter(result => result.score > 0.7) // Minimum relevance threshold
-        .slice(0, maxChunks);
+        .filter(result => result.score > 0.1) // Basic threshold for content selection
+        .slice(0, maxChunks); // Use only top 3 chunks
 
       if (relevantChunks.length === 0) {
         return {

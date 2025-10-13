@@ -42,7 +42,8 @@ app.use('*', async (c, next) => {
     '/health',
     '/docs',
     '/v1/auth',
-    '/v1/auth/generate'
+    '/v1/auth/generate',
+    '/v1/content/search'
   ];
 
   // docs 경로 하위도 모두 허용

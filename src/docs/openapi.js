@@ -885,6 +885,127 @@ export const openApiSpec = {
         }
       }
     },
+    "/v1/content/search": {
+      post: {
+        tags: ["Content"],
+        summary: "Search content using vectorized semantic search",
+        description: "Perform semantic search across indexed content using vector embeddings (no authentication required)",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["query"],
+                properties: {
+                  query: {
+                    type: "string",
+                    minLength: 1,
+                    example: "재택근무 보안",
+                    description: "Search query for semantic content matching"
+                  },
+                  topK: {
+                    type: "integer",
+                    minimum: 1,
+                    maximum: 50,
+                    default: 10,
+                    example: 10,
+                    description: "Number of top results to return"
+                  },
+                  contentId: {
+                    type: "string",
+                    example: "a1b2c3d4e5f6789",
+                    description: "Filter results to specific content ID"
+                  },
+                  type: {
+                    type: "string",
+                    enum: ["transcript", "summary"],
+                    description: "Filter by content type"
+                  },
+                  language: {
+                    type: "string",
+                    example: "ko",
+                    description: "Filter by language"
+                  }
+                }
+              }
+            }
+          }
+        },
+        responses: {
+          200: {
+            description: "Search results retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        query: { type: "string", example: "재택근무 보안" },
+                        results: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              id: { type: "string", example: "a1b2c3d4-transcript-0" },
+                              score: { type: "number", example: 0.85, description: "Similarity score (0-1)" },
+                              contentId: { type: "string", example: "a1b2c3d4e5f6789" },
+                              type: { type: "string", enum: ["transcript", "summary"], example: "transcript" },
+                              text: { type: "string", example: "재택근무 보안에 대한 중요한 지침들..." },
+                              chunkIndex: { type: "integer", example: 0 },
+                              startTime: { type: "number", example: 45.2 },
+                              endTime: { type: "number", example: 78.5 },
+                              language: { type: "string", example: "ko" },
+                              createdAt: { type: "string", format: "date-time" }
+                            }
+                          }
+                        },
+                        total: { type: "integer", example: 5 },
+                        options: {
+                          type: "object",
+                          properties: {
+                            topK: { type: "integer", example: 10 },
+                            contentId: { type: "string" },
+                            type: { type: "string" },
+                            language: { type: "string" }
+                          }
+                        },
+                        debug: {
+                          type: "object",
+                          properties: {
+                            requestedContentId: { type: "string" },
+                            metadataFilterApplied: { type: "boolean" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: "Bad request - Invalid search parameters",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          500: {
+            description: "Search service error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/content/contents": {
       get: {
         tags: ["Content"],

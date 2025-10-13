@@ -40,14 +40,17 @@ chat.post('/', async (c) => {
     if (lastUserMessage && c.env.CONTENT_VECTORIZE) {
       try {
         // Search for relevant content
-        const contextResult = await vectorize.getContentContext(lastUserMessage.content, 3);
+        const searchOptions = options.contentId ? { contentId: options.contentId } : {};
+        const contextResult = await vectorize.getContentContext(lastUserMessage.content, 3, searchOptions);
 
         if (contextResult.hasContext) {
           // Add context to system message or create new one
           const contextPrompt = `관련 강의 자료:
 ${contextResult.context}
 
-위 강의 자료를 참고하여 학습자의 질문에 답변해주세요. 강의 내용과 관련이 있는 경우 자세히 설명하고, 관련이 없는 경우 일반적인 답변을 제공하세요.`;
+위 강의 자료를 참고하여 학습자의 질문에 답변해주세요. 강의 내용과 관련이 있는 경우 자세히 설명해주세요.
+
+IMPORTANT: 답변 시작 부분에 반드시 "📚 강의 내용을 기반으로 답변드립니다.\n\n"를 포함하여 사용자에게 이것이 강의 기반 답변임을 알려주세요.`;
 
           const hasSystemMessage = enhancedMessages.some(msg => msg.role === 'system');
 
@@ -68,7 +71,27 @@ ${contextResult.context}
 
           console.log(`✅ Found ${contextResult.relevantChunks} relevant content chunks for query`);
         } else {
-          console.log('ℹ️ No relevant content found for query');
+          // No relevant content found - return rejection message directly without AI processing
+          console.log('ℹ️ No relevant content found - returning rejection message directly');
+
+          const rejectionMessage = '죄송합니다. 현재 등록된 강의 자료에서는 해당 내용을 찾을 수 없습니다. 강의 내용과 관련된 다른 질문을 해주시면 도움을 드릴 수 있습니다.';
+
+          // Create a simple SSE stream with the rejection message
+          const rejectionStream = new ReadableStream({
+            start(controller) {
+              const sseData = `data: ${JSON.stringify({
+                choices: [{
+                  delta: { content: rejectionMessage }
+                }]
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseData));
+              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              controller.close();
+            }
+          });
+
+          const parsedRejectionStream = parseSSEStream(rejectionStream);
+          return createSSEResponse(parsedRejectionStream);
         }
       } catch (vectorError) {
         console.error('Vector search error (continuing without context):', vectorError);
@@ -112,13 +135,16 @@ chat.post('/simple', async (c) => {
 
     if (c.env.CONTENT_VECTORIZE) {
       try {
-        const contextResult = await vectorize.getContentContext(sanitizeInput(message), 3);
+        const searchOptions = options.contentId ? { contentId: options.contentId } : {};
+        const contextResult = await vectorize.getContentContext(sanitizeInput(message), 3, searchOptions);
 
         if (contextResult.hasContext) {
           const contextPrompt = `관련 강의 자료:
 ${contextResult.context}
 
-위 강의 자료를 참고하여 학습자의 질문에 답변해주세요. 강의 내용과 관련이 있는 경우 자세히 설명하고, 관련이 없는 경우 일반적인 답변을 제공하세요.`;
+위 강의 자료를 참고하여 학습자의 질문에 답변해주세요. 강의 내용과 관련이 있는 경우 자세히 설명해주세요.
+
+IMPORTANT: 답변 시작 부분에 반드시 "📚 강의 내용을 기반으로 답변드립니다.\n\n"를 포함하여 사용자에게 이것이 강의 기반 답변임을 알려주세요.`;
 
           enhancedSystemPrompt = enhancedSystemPrompt
             ? enhancedSystemPrompt + '\n\n' + contextPrompt
@@ -126,7 +152,27 @@ ${contextResult.context}
 
           console.log(`✅ Found ${contextResult.relevantChunks} relevant content chunks for simple chat`);
         } else {
-          console.log('ℹ️ No relevant content found for simple chat query');
+          // No relevant content found - return rejection message directly without AI processing
+          console.log('ℹ️ No relevant content found in simple chat - returning rejection message directly');
+
+          const rejectionMessage = '죄송합니다. 현재 등록된 강의 자료에서는 해당 내용을 찾을 수 없습니다. 강의 내용과 관련된 다른 질문을 해주시면 도움을 드릴 수 있습니다.';
+
+          // Create a simple SSE stream with the rejection message
+          const rejectionStream = new ReadableStream({
+            start(controller) {
+              const sseData = `data: ${JSON.stringify({
+                choices: [{
+                  delta: { content: rejectionMessage }
+                }]
+              })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseData));
+              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              controller.close();
+            }
+          });
+
+          const parsedRejectionStream = parseSSEStream(rejectionStream);
+          return createSSEResponse(parsedRejectionStream);
         }
       } catch (vectorError) {
         console.error('Vector search error in simple chat (continuing without context):', vectorError);

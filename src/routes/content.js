@@ -309,13 +309,9 @@ const searchSchema = z.object({
   language: z.string().optional() // Filter by language
 });
 
-content.get('/search', async (c) => {
+content.post('/search', async (c) => {
   try {
-    const query = c.req.query('query');
-    const topK = parseInt(c.req.query('topK')) || 10;
-    const contentId = c.req.query('contentId');
-    const type = c.req.query('type');
-    const language = c.req.query('language');
+    const { query, topK = 10, contentId, type, language } = await c.req.json();
 
     const validatedData = validateInput(searchSchema, {
       query,
@@ -345,7 +341,8 @@ content.get('/search', async (c) => {
       query: searchQuery,
       results: searchResults.results,
       total: searchResults.total,
-      options: searchOptions
+      options: searchOptions,
+      debug: searchResults.debug
     }));
 
   } catch (error) {
@@ -379,6 +376,60 @@ content.post('/context', async (c) => {
   } catch (error) {
     console.error('Error getting content context:', error);
     return c.json(createErrorResponse('Failed to get content context', 500), 500);
+  }
+});
+
+// Re-index existing content in vectorize (admin function)
+content.post('/reindex/:contentId', async (c) => {
+  try {
+    const { contentId } = c.req.param();
+
+    if (!contentId) {
+      return c.json(createErrorResponse('Content ID is required', 400), 400);
+    }
+
+    // Get content summary and subtitle data
+    const summaryDataStr = await c.env.AITUTOR_KV.get(`content:summary:${contentId}`);
+    const subtitleDataStr = await c.env.AITUTOR_KV.get(`content:subtitle:${contentId}`);
+
+    if (!summaryDataStr || !subtitleDataStr) {
+      return c.json(createErrorResponse('Content data not found', 404), 404);
+    }
+
+    const summaryData = JSON.parse(summaryDataStr);
+    const subtitleData = JSON.parse(subtitleDataStr);
+
+    // Initialize services
+    const openaiService = new OpenAIService(c.env);
+    const vectorizeService = new VectorizeService(
+      c.env.CONTENT_VECTORIZE,
+      openaiService
+    );
+
+    // Re-index content in vectorize
+    const vectorMetadata = {
+      language: subtitleData.language,
+      duration: subtitleData.duration,
+      videoUrl: summaryData.videoUrl,
+      source: subtitleData.source
+    };
+
+    const indexResult = await vectorizeService.indexContent(
+      contentId,
+      summaryData.summary,
+      subtitleData.segments,
+      vectorMetadata
+    );
+
+    return c.json(createSuccessResponse({
+      contentId,
+      message: 'Content re-indexed successfully',
+      indexResult
+    }));
+
+  } catch (error) {
+    console.error('Error re-indexing content:', error);
+    return c.json(createErrorResponse('Failed to re-index content', 500), 500);
   }
 });
 
