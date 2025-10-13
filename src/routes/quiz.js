@@ -1,105 +1,195 @@
 import { Hono } from 'hono';
 import { OpenAIService } from '../services/openai.js';
-import { parseSSEStream, createSSEResponse, createErrorResponse } from '../utils/responses.js';
-import { validateOptions, sanitizeInput } from '../utils/validation.js';
+import { KVService } from '../services/kv.js';
+import { createErrorResponse, createSuccessResponse } from '../utils/responses.js';
 
 const quiz = new Hono();
 
-quiz.post('/', async (c) => {
+// Get quiz questions based on content ID (콘텐츠 ID 필수)
+quiz.get('/:contentId', async (c) => {
   try {
-    const { topic, questionCount = 5, options = {} } = await c.req.json();
+    const { contentId } = c.req.param();
 
-    if (!topic || typeof topic !== 'string') {
-      return c.json(createErrorResponse('Topic is required and must be a string'), 400);
+    if (!contentId) {
+      return c.json(createErrorResponse('Content ID is required', 400), 400);
     }
 
-    // Validate question count
-    const count = parseInt(questionCount);
-    if (isNaN(count) || count < 1 || count > 10) {
-      return c.json(createErrorResponse('Question count must be between 1 and 10'), 400);
+    // Initialize KV service
+    const kvService = new KVService(c.env.AITUTOR_KV);
+
+    // First try to get pre-generated quiz
+    const quizData = await kvService.get(KVService.contentKey('quiz', contentId));
+
+    if (quizData) {
+      return c.json(createSuccessResponse({
+        contentId,
+        quiz: quizData.quiz,
+        totalQuestions: quizData.totalQuestions,
+        language: quizData.language,
+        videoUrl: quizData.videoUrl,
+        createdAt: quizData.createdAt,
+        type: 'pre-generated'
+      }));
     }
 
-    validateOptions(options);
+    // If no pre-generated quiz, generate dynamically from content
+    const summaryData = await kvService.get(KVService.contentKey('summary', contentId));
 
-    // Sanitize inputs
-    const sanitizedTopic = sanitizeInput(topic);
-
-    // Check API key
-    if (!c.env.OPENAI_API_KEY) {
-      return c.json(createErrorResponse('OpenAI API key not configured'), 500);
+    if (!summaryData) {
+      return c.json(createErrorResponse('Content not found for quiz generation', 404), 404);
     }
 
-    // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
-    const openai = new OpenAIService(c.env);
-    const stream = await openai.createQuiz(sanitizedTopic, count, options);
-    const parsedStream = parseSSEStream(stream);
+    // Initialize OpenAI service for dynamic quiz generation
+    const openaiService = new OpenAIService(c.env);
 
-    return createSSEResponse(parsedStream);
+    // Generate quiz from full content
+    const generatedQuiz = await generateQuizFromContent(
+      summaryData.originalText,
+      summaryData.language,
+      openaiService
+    );
+
+    const responseData = {
+      contentId,
+      quiz: generatedQuiz,
+      totalQuestions: generatedQuiz.length,
+      language: summaryData.language,
+      videoUrl: summaryData.videoUrl,
+      createdAt: new Date().toISOString(),
+      type: 'dynamically-generated'
+    };
+
+    // Cache the generated quiz for future requests
+    await kvService.set(KVService.contentKey('quiz', contentId), responseData);
+
+    return c.json(createSuccessResponse(responseData));
 
   } catch (error) {
-    console.error('Quiz error:', error);
-    return c.json(createErrorResponse(error.message), 400);
+    console.error('Error getting quiz questions:', error);
+    return c.json(createErrorResponse('Failed to get quiz questions', 500), 500);
   }
 });
 
-quiz.post('/generate', async (c) => {
+// Helper function to generate quiz from content
+async function generateQuizFromContent(text, language, openaiService) {
+  const maxChunkLength = 2500; // Optimal size for meaningful quiz questions
+  const targetQuestionsPerChunk = 6;
+  const maxTotalQuestions = 20;
+
   try {
-    const { topic, difficulty = 'intermediate', type = 'multiple-choice', questionCount = 5, options = {} } = await c.req.json();
+    if (text.length <= maxChunkLength) {
+      // Generate questions from single chunk
+      return await generateQuizChunk(text, language, Math.min(maxTotalQuestions, targetQuestionsPerChunk), openaiService);
+    } else {
+      // Split into chunks and generate questions
+      const chunks = splitTextIntoChunks(text, maxChunkLength);
+      const questionsPerChunk = Math.min(targetQuestionsPerChunk, Math.ceil(maxTotalQuestions / chunks.length));
 
-    if (!topic || typeof topic !== 'string') {
-      return c.json(createErrorResponse('Topic is required and must be a string'), 400);
+      const allQuestions = [];
+
+      for (let i = 0; i < chunks.length && allQuestions.length < maxTotalQuestions; i++) {
+        const chunk = chunks[i];
+        const questionsNeeded = Math.min(questionsPerChunk, maxTotalQuestions - allQuestions.length);
+
+        const chunkQuestions = await generateQuizChunk(chunk, language, questionsNeeded, openaiService);
+        allQuestions.push(...chunkQuestions);
+
+        // Small delay to avoid rate limiting
+        if (i < chunks.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      return allQuestions.slice(0, maxTotalQuestions);
     }
+  } catch (error) {
+    console.error('Error generating quiz from content:', error);
+    return [];
+  }
+}
 
-    const count = parseInt(questionCount);
-    if (isNaN(count) || count < 1 || count > 10) {
-      return c.json(createErrorResponse('Question count must be between 1 and 10'), 400);
-    }
-
-    validateOptions(options);
-
-    const sanitizedTopic = sanitizeInput(topic);
-
-    if (!c.env.OPENAI_API_KEY) {
-      return c.json(createErrorResponse('OpenAI API key not configured'), 500);
-    }
-
-    // Enhanced quiz generation with difficulty and type
-    const systemMessage = {
+// Helper function to generate quiz questions from a single chunk
+async function generateQuizChunk(text, language, questionCount, openaiService) {
+  const messages = [
+    {
       role: 'system',
-      content: `You are an expert quiz generator. Create ${difficulty} level ${type} questions about the given topic.
-                Format your response as JSON:
-                {
-                  "title": "Quiz: [Topic Name] (${difficulty})",
-                  "difficulty": "${difficulty}",
-                  "type": "${type}",
-                  "questions": [
-                    {
-                      "question": "Question text",
-                      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
-                      "correct": "A",
-                      "explanation": "Detailed explanation"
-                    }
-                  ]
-                }
-                IMPORTANT: Complete quiz within 450 tokens. Generate exactly ${count} questions.`
-    };
+      content: `You are a quiz generator. Create ${questionCount} high-quality multiple choice questions from the given content.
 
-    const userMessage = {
+Response Format (MUST follow exactly):
+[
+  {"question": "question 1", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "explanation"},
+  {"question": "question 2", "options": ["A", "B", "C", "D"], "answer": 1, "explanation": "explanation"}
+]
+
+Guidelines:
+- Generate exactly ${questionCount} questions
+- Each question should test understanding of key concepts from the content
+- Provide 4 answer options (A, B, C, D) for each question
+- Include the correct answer index (0-3) and a brief explanation
+- Questions should be practical and educational
+- Avoid overly simple or overly complex questions
+- Focus on the most important concepts in the content
+- Respond in ${language === 'ko' ? 'Korean' : 'English'} language`
+    },
+    {
       role: 'user',
-      content: `Create ${count} ${difficulty} level ${type} questions about: ${sanitizedTopic}`
-    };
+      content: `Generate ${questionCount} quiz questions from this content:\n\n${text}`
+    }
+  ];
 
-    // Process with OpenAI (AI Gateway ID 'aitutor' 하드코딩됨)
-    const openai = new OpenAIService(c.env);
-    const stream = await openai.streamChat([systemMessage, userMessage], options);
-    const parsedStream = parseSSEStream(stream);
+  try {
+    const response = await openaiService.createChatCompletion({
+      messages,
+      model: 'gpt-4o-mini',
+      max_tokens: 800,
+      temperature: 0.3
+    });
 
-    return createSSEResponse(parsedStream);
+    const responseText = response.choices[0].message.content.trim();
 
+    // Remove markdown code blocks if present
+    const cleanedResponse = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+
+    try {
+      return JSON.parse(cleanedResponse);
+    } catch (parseError) {
+      console.error('Error parsing quiz response:', parseError);
+      return [];
+    }
   } catch (error) {
-    console.error('Quiz generate error:', error);
-    return c.json(createErrorResponse(error.message), 400);
+    console.error('Error generating quiz chunk:', error);
+    return [];
   }
-});
+}
+
+// Helper function to split text into chunks
+function splitTextIntoChunks(text, maxLength) {
+  const chunks = [];
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+
+  let currentChunk = '';
+
+  for (const sentence of sentences) {
+    const trimmedSentence = sentence.trim();
+    if (!trimmedSentence) continue;
+
+    const potentialChunk = currentChunk + (currentChunk ? '. ' : '') + trimmedSentence;
+
+    if (potentialChunk.length <= maxLength) {
+      currentChunk = potentialChunk;
+    } else {
+      if (currentChunk) {
+        chunks.push(currentChunk + '.');
+      }
+      currentChunk = trimmedSentence;
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk + (currentChunk.endsWith('.') ? '' : '.'));
+  }
+
+  return chunks;
+}
 
 export default quiz;

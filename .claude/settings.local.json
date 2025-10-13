@@ -15,7 +15,10 @@
       "Bash(wrangler tail:*)",
       "WebFetch(domain:developers.cloudflare.com)",
       "WebFetch(domain:github.com)",
-      "Bash(wrangler vectorize list-metadata-index:*)"
+      "Bash(wrangler vectorize list-metadata-index:*)",
+      "Bash(wrangler deploy:*)",
+      "Bash(npm run build:*)",
+      "Bash(wrangler dev:*)"
     ],
     "deny": [],
     "ask": []

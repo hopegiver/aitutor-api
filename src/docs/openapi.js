@@ -1056,6 +1056,274 @@ export const openApiSpec = {
           }
         }
       }
+    },
+    "/v1/content/recommend/{contentId}": {
+      get: {
+        tags: ["Content"],
+        summary: "Get recommended questions based on content",
+        description: "Generate AI-powered recommended questions based on content summary for enhanced learning experience (requires authentication)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: "contentId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Content identifier to generate recommendations for",
+            example: "a1b2c3d4e5f6789"
+          }
+        ],
+        responses: {
+          200: {
+            description: "Recommended questions generated successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        contentId: { type: "string", example: "a1b2c3d4e5f6789" },
+                        recommendedQuestions: {
+                          type: "array",
+                          items: { type: "string" },
+                          example: [
+                            "이 강의에서 다루는 핵심 개념은 무엇인가요?",
+                            "실제 업무에서 이 내용을 어떻게 활용할 수 있나요?",
+                            "이 주제와 관련된 추가 학습 자료는 어떤 것이 있나요?",
+                            "강의 내용 중 가장 중요한 포인트는 무엇인가요?",
+                            "이론을 실습으로 연결하려면 어떤 방법이 좋을까요?"
+                          ]
+                        },
+                        total: { type: "integer", example: 5 },
+                        generatedAt: { type: "string", format: "date-time" },
+                        summaryPreview: { type: "string", description: "First 200 characters of the content summary" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: "Bad request - Content ID required or summary empty",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          401: {
+            description: "Authentication required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          404: {
+            description: "Content summary not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          500: {
+            description: "Failed to generate recommended questions",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/quiz/{contentId}": {
+      get: {
+        tags: ["Content"],
+        summary: "Get quiz questions based on content",
+        description: "Retrieve AI-generated quiz questions that were created during content processing (requires authentication)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: "contentId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Content identifier to get quiz questions for",
+            example: "f4d86c8ffbed032815287f11af8c4668"
+          }
+        ],
+        responses: {
+          200: {
+            description: "Quiz questions retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        contentId: { type: "string", example: "f4d86c8ffbed032815287f11af8c4668" },
+                        quiz: {
+                          type: "array",
+                          items: {
+                            type: "object",
+                            properties: {
+                              question: { type: "string", example: "비대면 시대에 사이버 공격이 증가하는 주된 이유는 무엇인가요?" },
+                              options: {
+                                type: "array",
+                                items: { type: "string" },
+                                example: ["온라인 활동 증가", "보안 인식 부족", "취약한 시스템", "모든 것이 해당"]
+                              },
+                              answer: { type: "integer", example: 3, description: "Correct answer index (0-3)" },
+                              explanation: { type: "string", example: "비대면 시대의 모든 요인이 사이버 공격 증가에 기여합니다." }
+                            }
+                          }
+                        },
+                        totalQuestions: { type: "integer", example: 5 },
+                        language: { type: "string", example: "ko" },
+                        videoUrl: { type: "string", format: "uri" },
+                        createdAt: { type: "string", format: "date-time" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: "Bad request - Content ID required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          401: {
+            description: "Authentication required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          404: {
+            description: "Quiz questions not found for this content",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          500: {
+            description: "Failed to get quiz questions",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/content/objectives/{contentId}": {
+      get: {
+        tags: ["Content"],
+        summary: "Get learning objectives based on content",
+        description: "Retrieve AI-generated learning objectives from content summary for initial loading (requires authentication)",
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: "contentId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Content identifier to get learning objectives for",
+            example: "f4d86c8ffbed032815287f11af8c4668"
+          }
+        ],
+        responses: {
+          200: {
+            description: "Learning objectives retrieved successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    success: { type: "boolean", example: true },
+                    data: {
+                      type: "object",
+                      properties: {
+                        contentId: { type: "string", example: "f4d86c8ffbed032815287f11af8c4668" },
+                        objectives: {
+                          type: "array",
+                          items: { type: "string" },
+                          example: [
+                            "이 강의를 통해 비대면 시대의 특징과 변화를 이해할 수 있다",
+                            "사이버 공격 증가의 원인과 배경을 설명할 수 있다",
+                            "피싱 메일과 악성코드의 위험성을 구분할 수 있다",
+                            "화상회의 플랫폼의 보안 취약점을 분석할 수 있다",
+                            "재택근무 환경에서의 보안 수칙을 적용할 수 있다"
+                          ]
+                        },
+                        totalObjectives: { type: "integer", example: 5 },
+                        language: { type: "string", example: "ko" },
+                        videoUrl: { type: "string", format: "uri" },
+                        createdAt: { type: "string", format: "date-time" },
+                        type: {
+                          type: "string",
+                          enum: ["cached", "generated"],
+                          example: "generated",
+                          description: "Whether objectives were cached or dynamically generated"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          400: {
+            description: "Bad request - Content ID required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          401: {
+            description: "Authentication required",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          404: {
+            description: "Content summary not found for objectives generation",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          },
+          500: {
+            description: "Failed to get learning objectives",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   components: {

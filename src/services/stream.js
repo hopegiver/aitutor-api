@@ -1,9 +1,17 @@
+/**
+ * Cloudflare Stream Service
+ * Optimized for AI caption generation and subtitle processing
+ */
 export class StreamService {
   constructor(accountId, apiToken) {
     this.accountId = accountId;
     this.apiToken = apiToken;
     this.baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/stream`;
   }
+
+  // ===============================
+  // Core Stream Operations
+  // ===============================
 
   async uploadVideoFromUrl(videoUrl, metadata = {}) {
     try {
@@ -60,181 +68,52 @@ export class StreamService {
     }
   }
 
-  async getAudioDownloadUrl(videoId) {
+  async waitForProcessing(videoId, maxWaitTime = 300000, pollInterval = 5000) {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      const status = await this.getVideoStatus(videoId);
+
+      if (status.status?.state === 'ready') {
+        return status;
+      }
+
+      if (status.status?.state === 'error') {
+        throw new Error(`Video processing failed: ${status.status.errorReasonText || 'Unknown error'}`);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    throw new Error('Video processing timeout');
+  }
+
+  async deleteVideo(videoId) {
     try {
-      // Method 1: Try downloads API first
-      const response = await fetch(`${this.baseUrl}/${videoId}/downloads`, {
+      const response = await fetch(`${this.baseUrl}/${videoId}`, {
+        method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${this.apiToken}`
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Downloads API response:', JSON.stringify(data, null, 2));
-
-        const audioDownload = data.result.default?.find(item =>
-          item.type === 'audio' || item.type === 'mp3' || item.type === 'mp4'
-        );
-
-        if (audioDownload) {
-          console.log('Found audio download:', audioDownload);
-          return audioDownload.url;
-        }
-      }
-
-      // Method 2: Try to extract audio from HLS stream
-      console.log('Downloads API failed, trying HLS audio extraction...');
-      return await this.extractAudioFromHLS(videoId);
-
-    } catch (error) {
-      console.error('Error getting audio download URL:', error);
-      throw error;
-    }
-  }
-
-  async extractAudioFromHLS(videoId) {
-    try {
-      // Get video status to access HLS URL
-      const videoStatus = await this.getVideoStatus(videoId);
-      const hlsUrl = videoStatus.playback?.hls;
-
-      if (!hlsUrl) {
-        throw new Error('HLS playback URL not available');
-      }
-
-      console.log('HLS URL found:', hlsUrl);
-
-      // Fetch HLS manifest to find audio streams
-      const manifestResponse = await fetch(hlsUrl);
-      if (!manifestResponse.ok) {
-        throw new Error('Failed to fetch HLS manifest');
-      }
-
-      const manifestText = await manifestResponse.text();
-      console.log('HLS Manifest preview:', manifestText.substring(0, 500) + '...');
-
-      // Look for audio-only streams in the manifest
-      const lines = manifestText.split('\n');
-      let audioStreamUrl = null;
-
-      // Method 1: Look for EXT-X-MEDIA with TYPE=AUDIO
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-
-        if (line.startsWith('#EXT-X-MEDIA:') && line.includes('TYPE=AUDIO')) {
-          console.log('Found audio media entry:', line);
-
-          // Extract URI from the audio media line
-          const uriMatch = line.match(/URI="([^"]+)"/);
-          if (uriMatch) {
-            const audioUri = uriMatch[1];
-            audioStreamUrl = audioUri.startsWith('http') ? audioUri : new URL(audioUri, hlsUrl).href;
-            console.log('Extracted audio stream URL:', audioStreamUrl);
-            break;
-          }
-        }
-      }
-
-      // Method 2: If no dedicated audio stream, look for lowest bitrate video stream
-      if (!audioStreamUrl) {
-        console.log('No dedicated audio stream found, looking for lowest bitrate stream...');
-
-        let lowestBandwidth = Infinity;
-        let lowestBandwidthUrl = null;
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-
-          if (line.startsWith('#EXT-X-STREAM-INF')) {
-            const bandwidthMatch = line.match(/BANDWIDTH=(\d+)/);
-            if (bandwidthMatch) {
-              const bandwidth = parseInt(bandwidthMatch[1]);
-              const nextLine = lines[i + 1]?.trim();
-
-              if (nextLine && !nextLine.startsWith('#') && bandwidth < lowestBandwidth) {
-                lowestBandwidth = bandwidth;
-                lowestBandwidthUrl = nextLine.startsWith('http') ? nextLine : new URL(nextLine, hlsUrl).href;
-              }
-            }
-          }
-        }
-
-        if (lowestBandwidthUrl) {
-          audioStreamUrl = lowestBandwidthUrl;
-          console.log(`Found lowest bitrate stream (${lowestBandwidth} bps):`, audioStreamUrl);
-        }
-      }
-
-      if (audioStreamUrl) {
-        return audioStreamUrl;
-      }
-
-      // Method 3: If no audio-only stream, try to request audio extraction
-      console.log('No audio-only stream found, trying audio extraction request...');
-      return await this.requestAudioExtraction(videoId);
-
-    } catch (error) {
-      console.error('Error extracting audio from HLS:', error);
-      throw error;
-    }
-  }
-
-  async requestAudioExtraction(videoId) {
-    try {
-      // Try to use Stream's clip/download features for audio extraction
-      const response = await fetch(`${this.baseUrl}/${videoId}/clip`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          clippedFromVideoUID: videoId,
-          startTimeSeconds: 0,
-          endTimeSeconds: 9999, // Full duration
-          allowedOrigins: ['*'],
-          requireSignedURLs: false,
-          meta: {
-            name: `Audio extraction from ${videoId}`,
-            type: 'audio-extraction'
-          }
-        })
-      });
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.log('Clip API failed:', errorData);
-        throw new Error(`Clip API error: ${errorData.errors?.[0]?.message || response.statusText}`);
+        throw new Error(`Stream API error: ${errorData.errors?.[0]?.message || response.statusText}`);
       }
 
-      const clipData = await response.json();
-      const clipId = clipData.result.uid;
-
-      console.log('Created clip for audio extraction:', clipId);
-
-      // Wait for clip processing and try to get audio from it
-      await this.waitForProcessing(clipId, 120000, 5000); // 2 minutes max
-
-      return await this.getAudioDownloadUrl(clipId);
+      return true;
 
     } catch (error) {
-      console.error('Error requesting audio extraction:', error);
-
-      // Method 4: Fallback to original HLS URL (no longer used with Stream AI captions)
-      const videoStatus = await this.getVideoStatus(videoId);
-      const hlsUrl = videoStatus.playback?.hls;
-
-      if (hlsUrl) {
-        console.log('Falling back to HLS URL (deprecated with Stream AI captions):', hlsUrl);
-        return hlsUrl;
-      }
-
-      throw new Error('All audio extraction methods failed');
+      console.error('Error deleting video:', error);
+      throw error;
     }
   }
 
-  // AI Caption Generation Methods
+  // ===============================
+  // AI Caption Operations
+  // ===============================
+
   async generateCaptions(videoId, language = 'ko') {
     try {
       console.log(`Starting AI caption generation for video ${videoId} in language: ${language}`);
@@ -371,45 +250,135 @@ export class StreamService {
     throw new Error('Caption generation timeout');
   }
 
-  async deleteVideo(videoId) {
-    try {
-      const response = await fetch(`${this.baseUrl}/${videoId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.apiToken}`
-        }
-      });
+  // ===============================
+  // Subtitle Processing Management
+  // ===============================
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Stream API error: ${errorData.errors?.[0]?.message || response.statusText}`);
-      }
+  extractPlainText(vttContent) {
+    if (!vttContent) return '';
 
-      return true;
-
-    } catch (error) {
-      console.error('Error deleting video:', error);
-      throw error;
-    }
+    return vttContent
+      .split('\n')
+      .filter(line => {
+        const trimmed = line.trim();
+        // Skip empty lines, WebVTT headers, timestamps, and style tags
+        return trimmed.length > 0 &&
+               !trimmed.startsWith('WEBVTT') &&
+               !trimmed.includes('-->') &&
+               !/^\d+$/.test(trimmed) &&
+               !trimmed.startsWith('<') &&
+               !trimmed.startsWith('NOTE') &&
+               !trimmed.startsWith('STYLE') &&
+               !trimmed.startsWith('Region:');
+      })
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
-  async waitForProcessing(videoId, maxWaitTime = 300000, pollInterval = 5000) {
-    const startTime = Date.now();
+  extractDurationFromVTT(vttContent) {
+    if (!vttContent) return 0;
 
-    while (Date.now() - startTime < maxWaitTime) {
-      const status = await this.getVideoStatus(videoId);
+    const lines = vttContent.split('\n');
+    let lastTimestamp = '00:00:00.000';
 
-      if (status.status?.state === 'ready') {
-        return status;
+    for (const line of lines) {
+      const timestampMatch = line.match(/(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})/);
+      if (timestampMatch) {
+        lastTimestamp = timestampMatch[2];
       }
-
-      if (status.status?.state === 'error') {
-        throw new Error(`Video processing failed: ${status.status.errorReasonText || 'Unknown error'}`);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
 
-    throw new Error('Video processing timeout');
+    // Convert timestamp to seconds
+    const [hours, minutes, secondsWithMs] = lastTimestamp.split(':');
+    const [seconds, milliseconds] = secondsWithMs.split('.');
+
+    return (parseInt(hours) * 3600) +
+           (parseInt(minutes) * 60) +
+           parseInt(seconds) +
+           (parseInt(milliseconds) / 1000);
+  }
+
+  convertVTTToSegments(vttContent) {
+    if (!vttContent) return [];
+
+    const lines = vttContent.split('\n');
+    const segments = [];
+    let currentSegment = null;
+
+    for (const line of lines) {
+      const timestampMatch = line.match(/(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})/);
+
+      if (timestampMatch) {
+        // Start new segment
+        if (currentSegment) {
+          segments.push(currentSegment);
+        }
+
+        currentSegment = {
+          start: this.timestampToSeconds(timestampMatch[1]),
+          end: this.timestampToSeconds(timestampMatch[2]),
+          text: ''
+        };
+      } else if (currentSegment && line.trim() &&
+                 !line.trim().startsWith('WEBVTT') &&
+                 !/^\d+$/.test(line.trim()) &&
+                 !line.trim().startsWith('NOTE') &&
+                 !line.trim().startsWith('STYLE')) {
+        // Add text to current segment
+        if (currentSegment.text) {
+          currentSegment.text += ' ';
+        }
+        currentSegment.text += line.trim();
+      }
+    }
+
+    // Add the last segment
+    if (currentSegment) {
+      segments.push(currentSegment);
+    }
+
+    return segments.filter(segment => segment.text.trim().length > 0);
+  }
+
+  timestampToSeconds(timestamp) {
+    const [hours, minutes, secondsWithMs] = timestamp.split(':');
+    const [seconds, milliseconds] = secondsWithMs.split('.');
+
+    return (parseInt(hours) * 3600) +
+           (parseInt(minutes) * 60) +
+           parseInt(seconds) +
+           (parseInt(milliseconds) / 1000);
+  }
+
+  // Map language codes to Stream AI supported languages
+  mapLanguageCode(language) {
+    const languageMap = {
+      'ko-KR': 'ko',
+      'ko': 'ko',
+      'en-US': 'en',
+      'en': 'en',
+      'ja-JP': 'ja',
+      'ja': 'ja',
+      'zh-CN': 'zh',
+      'zh': 'zh',
+      'es-ES': 'es',
+      'es': 'es',
+      'fr-FR': 'fr',
+      'fr': 'fr',
+      'de-DE': 'de',
+      'de': 'de',
+      'it-IT': 'it',
+      'it': 'it',
+      'pt-PT': 'pt',
+      'pt': 'pt',
+      'ru-RU': 'ru',
+      'ru': 'ru',
+      'pl': 'pl',
+      'cs': 'cs',
+      'nl': 'nl'
+    };
+
+    return languageMap[language] || language.split('-')[0] || 'en';
   }
 }
