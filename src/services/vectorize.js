@@ -5,59 +5,64 @@ export class VectorizeService {
   }
 
   /**
-   * Split text into smart chunks based on sentences and size
+   * Create chunks based on segments with smart merging for optimal size
    */
-  createSmartChunks(text, maxChunkSize = 500) {
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  createSegmentBasedChunks(segments, minChunkSize = 300, maxChunkSize = 800) {
+    if (!segments || segments.length === 0) {
+      return [];
+    }
+
     const chunks = [];
-    let currentChunk = '';
+    let currentChunk = {
+      text: '',
+      startTime: 0,
+      endTime: 0,
+      segmentCount: 0
+    };
 
-    for (const sentence of sentences) {
-      const trimmedSentence = sentence.trim();
-      if (!trimmedSentence) continue;
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      if (!segment.text || !segment.text.trim()) continue;
 
-      const potentialChunk = currentChunk + (currentChunk ? '. ' : '') + trimmedSentence;
+      const segmentText = segment.text.trim();
+      const potentialText = currentChunk.text + (currentChunk.text ? ' ' : '') + segmentText;
 
-      if (potentialChunk.length <= maxChunkSize) {
-        currentChunk = potentialChunk;
-      } else {
-        if (currentChunk) {
-          chunks.push(currentChunk + '.');
+      // Start new chunk if this is the first segment
+      if (currentChunk.segmentCount === 0) {
+        currentChunk = {
+          text: segmentText,
+          startTime: segment.start || 0,
+          endTime: segment.end || 0,
+          segmentCount: 1
+        };
+      }
+      // Add to current chunk if within size limits
+      else if (potentialText.length <= maxChunkSize) {
+        currentChunk.text = potentialText;
+        currentChunk.endTime = segment.end || currentChunk.endTime;
+        currentChunk.segmentCount++;
+      }
+      // Finalize current chunk if it meets minimum size, start new one
+      else {
+        if (currentChunk.text.length >= minChunkSize) {
+          chunks.push({...currentChunk});
         }
-        currentChunk = trimmedSentence;
+
+        currentChunk = {
+          text: segmentText,
+          startTime: segment.start || 0,
+          endTime: segment.end || 0,
+          segmentCount: 1
+        };
       }
     }
 
-    if (currentChunk) {
-      chunks.push(currentChunk + '.');
+    // Add the last chunk if it meets minimum size
+    if (currentChunk.text && currentChunk.text.length >= minChunkSize) {
+      chunks.push(currentChunk);
     }
 
-    return chunks.filter(chunk => chunk.trim().length > 20); // Filter out very short chunks
-  }
-
-  /**
-   * Extract timestamps from VTT segments for chunk metadata
-   */
-  extractTimestampsFromSegments(segments, chunkText) {
-    if (!segments || segments.length === 0) return { startTime: 0, endTime: 0 };
-
-    // Find segments that contain words from this chunk
-    const chunkWords = chunkText.toLowerCase().split(/\s+/).slice(0, 5); // First 5 words
-    let startTime = 0;
-    let endTime = 0;
-
-    for (const segment of segments) {
-      const segmentText = segment.text?.toLowerCase() || '';
-      const hasMatch = chunkWords.some(word => segmentText.includes(word));
-
-      if (hasMatch) {
-        startTime = segment.start || 0;
-        endTime = segment.end || startTime + 30; // Default 30 seconds if no end time
-        break;
-      }
-    }
-
-    return { startTime, endTime };
+    return chunks;
   }
 
   /**
@@ -85,17 +90,16 @@ export class VectorizeService {
   /**
    * Index content chunks in Vectorize
    */
-  async indexContent(contentId, originalText, summary, segments = [], metadata = {}) {
+  async indexContent(contentId, summary, segments = [], metadata = {}) {
     try {
       const vectors = [];
 
-      // Chunk and index original transcript
-      const transcriptChunks = this.createSmartChunks(originalText, 500);
+      // Use segment-based chunking with smart merging for better timestamps
+      const transcriptChunks = this.createSegmentBasedChunks(segments, 300, 800);
 
       for (let i = 0; i < transcriptChunks.length; i++) {
         const chunk = transcriptChunks[i];
-        const embedding = await this.generateEmbedding(chunk);
-        const timestamps = this.extractTimestampsFromSegments(segments, chunk);
+        const embedding = await this.generateEmbedding(chunk.text);
 
         vectors.push({
           id: `${contentId}-transcript-${i}`,
@@ -103,10 +107,11 @@ export class VectorizeService {
           metadata: {
             contentId,
             type: 'transcript',
-            text: chunk,
+            text: chunk.text,
             chunkIndex: i,
-            startTime: timestamps.startTime,
-            endTime: timestamps.endTime,
+            startTime: chunk.startTime,
+            endTime: chunk.endTime,
+            segmentCount: chunk.segmentCount,
             language: metadata.language || 'ko',
             createdAt: new Date().toISOString(),
             ...metadata

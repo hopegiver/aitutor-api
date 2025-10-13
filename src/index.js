@@ -78,72 +78,19 @@ app.get('/', (c) => {
   return c.redirect('/docs');
 });
 
-// Health check with optional Vectorize test
+// Health check
 app.get('/health', async (c) => {
-  const cf = c.req.cf || {};
-  const headers = {};
-  const testVectorize = c.req.query('test-vectorize') === 'true';
-
-  // Collect all CF headers
-  c.req.raw.headers.forEach((value, key) => {
-    if (key.toLowerCase().startsWith('cf-')) {
-      headers[key] = value;
-    }
-  });
-
-  const response = {
+  return c.json({
     status: 'ok',
     version: 'v1',
     timestamp: new Date().toISOString(),
-    region: {
-      country: cf.country || 'unknown',
-      region: cf.region || 'unknown',
-      city: cf.city || 'unknown',
-      datacenter: cf.colo || 'unknown',
-      timezone: cf.timezone || 'unknown',
-      latitude: cf.latitude || 'unknown',
-      longitude: cf.longitude || 'unknown'
-    },
-    cfHeaders: headers,
-    environment: c.env?.ENVIRONMENT || 'unknown',
+    environment: c.env?.ENVIRONMENT || 'production',
     bindings: {
       KV: !!c.env.AITUTOR_KV,
       Queue: !!c.env.TRANSCRIBE_QUEUE,
       Vectorize: !!c.env.CONTENT_VECTORIZE
     }
-  };
-
-  // Optional Vectorize test
-  if (testVectorize && c.env.CONTENT_VECTORIZE) {
-    try {
-      const testVector = {
-        id: `health-test-${Date.now()}`,
-        values: Array(1536).fill(0).map(() => Math.random() * 2 - 1),
-        metadata: { source: 'health-check', timestamp: Date.now() }
-      };
-
-      await c.env.CONTENT_VECTORIZE.insert([testVector]);
-      const results = await c.env.CONTENT_VECTORIZE.query({
-        vector: testVector.values,
-        topK: 1
-      });
-      await c.env.CONTENT_VECTORIZE.deleteByIds([testVector.id]);
-
-      response.vectorizeTest = {
-        status: 'passed',
-        insertSuccess: true,
-        queryResults: results.matches?.length || 0,
-        cleanupSuccess: true
-      };
-    } catch (error) {
-      response.vectorizeTest = {
-        status: 'failed',
-        error: error.message
-      };
-    }
-  }
-
-  return c.json(response);
+  });
 });
 
 // Documentation

@@ -108,43 +108,22 @@ export class TranscribeConsumer {
       // Get caption content
       const captionContent = await this.streamService.getCaptionContent(streamUid, streamLanguage);
 
-      // Convert VTT to requested format if needed
-      const finalContent = await this.convertCaptionFormat(captionContent.content, contentData.options?.format || 'vtt');
-
       await this.kvService.updateContentProgress(contentId, 'summarizing', 90, 'Generating AI content summary');
 
       // Generate AI content summary
       const plainText = this.extractPlainText(captionContent.content);
       const summary = await this.generateContentSummary(plainText, captionContent.language);
 
-      // Create transcription result compatible with existing format
-      const transcriptionResult = {
-        text: plainText,
-        language: captionContent.language,
-        duration: this.extractDurationFromVTT(captionContent.content),
-        segments: this.convertVTTToSegments(captionContent.content),
-        format: contentData.options?.format || 'vtt',
-        content: finalContent,
-        source: 'cloudflare-stream-ai'
-      };
-
-      const metadata = {
-        contentId: contentId,
-        streamUid: streamUid,
-        originalLanguage: captionContent.language,
-        generatedBy: 'cloudflare-stream-ai',
-        captionLabel: captionContent.label
-      };
-
-      // Store original transcription result in job
-      await this.kvService.setContentResult(contentId, transcriptionResult, metadata);
+      // Extract common data once
+      const duration = this.extractDurationFromVTT(captionContent.content);
+      const segments = this.convertVTTToSegments(captionContent.content);
 
       // Store content info (metadata only)
       await this.kvService.setContentInfo(contentId, {
         contentId,
         status: 'completed',
         language: captionContent.language,
-        duration: this.extractDurationFromVTT(captionContent.content),
+        duration,
         videoUrl: contentData.videoUrl,
         source: 'cloudflare-stream-ai',
         createdAt: new Date().toISOString(),
@@ -154,12 +133,9 @@ export class TranscribeConsumer {
       // Store subtitle segments only (for timestamp-based search)
       await this.kvService.setContentSubtitle(contentId, {
         contentId,
-        streamUid: streamUid,
-        segments: this.convertVTTToSegments(captionContent.content),
+        segments,
         language: captionContent.language,
-        duration: this.extractDurationFromVTT(captionContent.content),
-        format: contentData.options?.format || 'vtt',
-        content: finalContent,
+        duration,
         source: 'cloudflare-stream-ai',
         videoUrl: contentData.videoUrl,
         createdAt: new Date().toISOString()
@@ -168,11 +144,10 @@ export class TranscribeConsumer {
       // Store original text + AI summary (for text-based search/conversation)
       await this.kvService.setContentSummary(contentId, {
         contentId,
-        streamUid: streamUid,
         originalText: plainText,
         summary: summary,
         language: captionContent.language,
-        duration: this.extractDurationFromVTT(captionContent.content),
+        duration,
         videoUrl: contentData.videoUrl,
         createdAt: new Date().toISOString()
       });
@@ -183,16 +158,15 @@ export class TranscribeConsumer {
       try {
         const vectorMetadata = {
           language: captionContent.language,
-          duration: this.extractDurationFromVTT(captionContent.content),
+          duration,
           videoUrl: contentData.videoUrl,
           source: 'cloudflare-stream-ai'
         };
 
         const indexResult = await this.vectorizeService.indexContent(
           contentId,
-          plainText,
           summary,
-          this.convertVTTToSegments(captionContent.content),
+          segments,
           vectorMetadata
         );
 
@@ -228,36 +202,16 @@ export class TranscribeConsumer {
 
   async generateContentSummary(text, language) {
     try {
-      const messages = [
-        {
-          role: 'system',
-          content: `You are an educational content summarizer. Your task is to create a concise, well-structured summary of video transcription content for learning purposes.
+      // Check if text is too long for single processing
+      const maxChunkLength = 8000; // Conservative limit for gpt-4o-mini context
 
-Guidelines:
-- Create a clear, organized summary that captures key concepts and learning points
-- Use bullet points or numbered lists for better readability
-- Focus on educational value and main takeaways
-- Include important details, examples, or explanations mentioned in the content
-- Keep the summary comprehensive but concise
-- Respond in ${language === 'ko' ? 'Korean' : 'English'} language
-- Structure your response with clear sections if the content covers multiple topics`
-        },
-        {
-          role: 'user',
-          content: `Please summarize the following video transcription content for educational purposes:
-
-${text}`
-        }
-      ];
-
-      const response = await this.openaiService.createChatCompletion({
-        messages,
-        model: 'gpt-4o-mini',
-        max_tokens: 2000,
-        temperature: 0.3
-      });
-
-      return response.choices[0].message.content;
+      if (text.length <= maxChunkLength) {
+        // Process short text directly
+        return await this.generateSingleSummary(text, language);
+      } else {
+        // Process long text with chunking strategy
+        return await this.generateChunkedSummary(text, language, maxChunkLength);
+      }
 
     } catch (error) {
       console.error('Error generating content summary:', error);
@@ -268,6 +222,139 @@ ${text.substring(0, 500)}${text.length > 500 ? '...' : ''}
 
 ※ AI 요약 생성 중 오류가 발생하여 원본 텍스트의 일부만 표시됩니다.`;
     }
+  }
+
+  async generateSingleSummary(text, language) {
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an educational content summarizer. Your task is to create a concise, well-structured summary of video transcription content for learning purposes.
+
+Guidelines:
+- Create a clear, organized summary that captures key concepts and learning points
+- Use bullet points or numbered lists for better readability
+- Focus on educational value and main takeaways
+- Include important details, examples, or explanations mentioned in the content
+- IMPORTANT: Keep the summary under 400 words (approximately 500 tokens)
+- End with a complete sentence - do not cut off mid-sentence
+- Respond in ${language === 'ko' ? 'Korean' : 'English'} language
+- Structure your response with clear sections if the content covers multiple topics`
+      },
+      {
+        role: 'user',
+        content: `Please summarize the following video transcription content for educational purposes:
+
+${text}`
+      }
+    ];
+
+    const response = await this.openaiService.createChatCompletion({
+      messages,
+      model: 'gpt-4o-mini',
+      max_tokens: 500,
+      temperature: 0.3
+    });
+
+    return response.choices[0].message.content;
+  }
+
+  async generateChunkedSummary(text, language, maxChunkLength) {
+    // Split text into chunks at sentence boundaries
+    const chunks = this.splitTextIntoChunks(text, maxChunkLength);
+    console.log(`Processing long text: ${text.length} chars → ${chunks.length} chunks`);
+
+    // Generate summary for each chunk
+    const chunkSummaries = [];
+    for (let i = 0; i < chunks.length; i++) {
+      console.log(`Summarizing chunk ${i + 1}/${chunks.length}`);
+
+      const chunkSummary = await this.generateSingleSummary(chunks[i], language);
+      chunkSummaries.push(chunkSummary);
+
+      // Add small delay to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    // Combine chunk summaries into final summary
+    const combinedSummaries = chunkSummaries.join('\n\n');
+
+    // Generate final consolidated summary
+    const finalMessages = [
+      {
+        role: 'system',
+        content: `You are consolidating multiple summaries into one final comprehensive summary.
+
+Guidelines:
+- Merge the summaries while removing redundancy
+- Maintain the key educational points from all parts
+- Create a coherent, well-structured final summary
+- IMPORTANT: Keep the final summary under 400 words (approximately 500 tokens)
+- End with a complete sentence - do not cut off mid-sentence
+- Respond in ${language === 'ko' ? 'Korean' : 'English'} language
+- Use bullet points or numbered lists for clarity`
+      },
+      {
+        role: 'user',
+        content: `Please consolidate these partial summaries into one comprehensive educational summary:
+
+${combinedSummaries}`
+      }
+    ];
+
+    const finalResponse = await this.openaiService.createChatCompletion({
+      messages: finalMessages,
+      model: 'gpt-4o-mini',
+      max_tokens: 500,
+      temperature: 0.3
+    });
+
+    return finalResponse.choices[0].message.content;
+  }
+
+  splitTextIntoChunks(text, maxLength) {
+    const chunks = [];
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+
+    let currentChunk = '';
+
+    for (const sentence of sentences) {
+      const trimmedSentence = sentence.trim();
+      if (!trimmedSentence) continue;
+
+      const potentialChunk = currentChunk + (currentChunk ? '. ' : '') + trimmedSentence;
+
+      if (potentialChunk.length <= maxLength) {
+        currentChunk = potentialChunk;
+      } else {
+        if (currentChunk) {
+          chunks.push(currentChunk + '.');
+        }
+        // Handle very long sentences
+        if (trimmedSentence.length > maxLength) {
+          const words = trimmedSentence.split(' ');
+          let wordChunk = '';
+          for (const word of words) {
+            if ((wordChunk + ' ' + word).length <= maxLength) {
+              wordChunk = wordChunk ? wordChunk + ' ' + word : word;
+            } else {
+              if (wordChunk) chunks.push(wordChunk);
+              wordChunk = word;
+            }
+          }
+          currentChunk = wordChunk;
+        } else {
+          currentChunk = trimmedSentence;
+        }
+      }
+    }
+
+    if (currentChunk) {
+      chunks.push(currentChunk + '.');
+    }
+
+    return chunks.filter(chunk => chunk.trim().length > 50); // Filter out very short chunks
   }
 
 
