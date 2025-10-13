@@ -40,11 +40,3 @@ vars = { ENVIRONMENT = "development" }
 # Observability settings
 [observability.logs]
 enabled = true
-
-# For development, you can use .env file or wrangler dev --var
-# For production, use: wrangler secret put OPENAI_API_KEY
-# OPENAI_API_KEY = "your-api-key"
-
-# Required secrets for transcription (use wrangler secret put):
-# - STREAM_API_TOKEN: Cloudflare Stream API token
-# - CLOUDFLARE_ACCOUNT_ID: Cloudflare account ID

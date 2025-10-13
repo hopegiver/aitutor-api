@@ -137,18 +137,24 @@ export class OpenAIService {
     }
   }
 
-  async createEmbedding(options = {}) {
+  async createEmbedding(input, options = {}) {
     try {
       const response = await this.client.embeddings.create({
         model: options.model || 'text-embedding-3-small',
-        input: options.input,
+        input: input,
         encoding_format: options.encoding_format || 'float'
       });
 
-      return response;
+      // Return just the embedding vector for convenience
+      return response.data[0].embedding;
     } catch (error) {
       console.error('OpenAI Embedding error:', error.message);
       throw new Error(`OpenAI Embedding error: ${error.message}`);
     }
   }
+}
+
+// Export a factory function for creating OpenAI service instances
+export function getOpenAIService(env) {
+  return new OpenAIService(env);
 }

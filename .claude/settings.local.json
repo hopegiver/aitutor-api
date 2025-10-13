@@ -8,7 +8,13 @@
       "Bash(git push:*)",
       "WebSearch",
       "Bash(npm install)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(rm:*)",
+      "Bash(npm run deploy:*)",
+      "Bash(curl:*)",
+      "Bash(wrangler tail:*)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

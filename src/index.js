@@ -5,7 +5,6 @@ import quiz from './routes/quiz.js';
 import docs from './routes/docs.js';
 import auth from './routes/auth.js';
 import content from './routes/content.js';
-import testVectorize from './routes/test-vectorize.js';
 import { AuthService } from './utils/auth.js';
 import { createErrorResponse } from './utils/responses.js';
 import handleQueue from './services/transcribe-consumer.js';
@@ -79,10 +78,11 @@ app.get('/', (c) => {
   return c.redirect('/docs');
 });
 
-// Health check
-app.get('/health', (c) => {
+// Health check with optional Vectorize test
+app.get('/health', async (c) => {
   const cf = c.req.cf || {};
   const headers = {};
+  const testVectorize = c.req.query('test-vectorize') === 'true';
 
   // Collect all CF headers
   c.req.raw.headers.forEach((value, key) => {
@@ -91,7 +91,7 @@ app.get('/health', (c) => {
     }
   });
 
-  return c.json({
+  const response = {
     status: 'ok',
     version: 'v1',
     timestamp: new Date().toISOString(),
@@ -106,8 +106,44 @@ app.get('/health', (c) => {
     },
     cfHeaders: headers,
     environment: c.env?.ENVIRONMENT || 'unknown',
-    allCfData: cf
-  });
+    bindings: {
+      KV: !!c.env.AITUTOR_KV,
+      Queue: !!c.env.TRANSCRIBE_QUEUE,
+      Vectorize: !!c.env.CONTENT_VECTORIZE
+    }
+  };
+
+  // Optional Vectorize test
+  if (testVectorize && c.env.CONTENT_VECTORIZE) {
+    try {
+      const testVector = {
+        id: `health-test-${Date.now()}`,
+        values: Array(1536).fill(0).map(() => Math.random() * 2 - 1),
+        metadata: { source: 'health-check', timestamp: Date.now() }
+      };
+
+      await c.env.CONTENT_VECTORIZE.insert([testVector]);
+      const results = await c.env.CONTENT_VECTORIZE.query({
+        vector: testVector.values,
+        topK: 1
+      });
+      await c.env.CONTENT_VECTORIZE.deleteByIds([testVector.id]);
+
+      response.vectorizeTest = {
+        status: 'passed',
+        insertSuccess: true,
+        queryResults: results.matches?.length || 0,
+        cleanupSuccess: true
+      };
+    } catch (error) {
+      response.vectorizeTest = {
+        status: 'failed',
+        error: error.message
+      };
+    }
+  }
+
+  return c.json(response);
 });
 
 // Documentation
@@ -118,7 +154,6 @@ app.route('/v1/auth', auth);
 app.route('/v1/chat', chat);
 app.route('/v1/quiz', quiz);
 app.route('/v1/content', content);
-app.route('/v1/test-vectorize', testVectorize);
 
 // 404 handler
 app.notFound((c) => {

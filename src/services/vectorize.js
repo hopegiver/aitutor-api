@@ -65,29 +65,19 @@ export class VectorizeService {
    */
   async generateEmbedding(text) {
     try {
-      console.log('Generating embedding for text:', text.substring(0, 100) + '...');
-
-      const response = await this.openaiService.createEmbedding({
+      // Use the simplified createEmbedding method that returns the embedding directly
+      const embedding = await this.openaiService.createEmbedding(text, {
         model: 'text-embedding-3-small',
-        input: text,
         encoding_format: 'float'
       });
 
-      console.log('Embedding response structure:', {
-        hasData: !!response.data,
-        dataLength: response.data?.length,
-        hasEmbedding: !!response.data?.[0]?.embedding,
-        embeddingLength: response.data?.[0]?.embedding?.length
-      });
-
-      if (!response.data || !response.data[0] || !response.data[0].embedding) {
-        throw new Error('Invalid embedding response structure');
+      if (!embedding || !Array.isArray(embedding) || embedding.length !== 1536) {
+        throw new Error(`Invalid embedding: length=${embedding?.length}, isArray=${Array.isArray(embedding)}`);
       }
 
-      return response.data[0].embedding;
+      return embedding;
     } catch (error) {
       console.error('Error generating embedding:', error);
-      console.error('Error details:', error.message);
       throw error;
     }
   }
@@ -181,16 +171,7 @@ export class VectorizeService {
       // Generate embedding for the search query
       const queryEmbedding = await this.generateEmbedding(query);
 
-      console.log('Search query embedding check:', {
-        hasEmbedding: !!queryEmbedding,
-        embeddingLength: queryEmbedding?.length,
-        embeddingType: typeof queryEmbedding,
-        isArray: Array.isArray(queryEmbedding),
-        firstFewValues: queryEmbedding?.slice(0, 3)
-      });
-
       if (!queryEmbedding || queryEmbedding.length === 0) {
-        console.error('Failed to generate query embedding');
         return {
           query,
           results: [],
@@ -199,25 +180,27 @@ export class VectorizeService {
         };
       }
 
+      // Convert to plain array for Vectorize query (required fix)
+      const vectorArray = Array.isArray(queryEmbedding) ? Array.from(queryEmbedding) : queryEmbedding;
+
       // Build filter conditions
       const filter = {};
       if (contentId) filter.contentId = contentId;
       if (type) filter.type = type;
       if (language) filter.language = language;
 
-      // Perform vector search
+      // Perform vector search with correct format
       const searchOptions = {
-        vector: queryEmbedding,
         topK,
-        includeMetadata,
-        includeValues: false
+        returnMetadata: includeMetadata ? "all" : "none",
+        returnValues: false
       };
 
       if (Object.keys(filter).length > 0) {
         searchOptions.filter = filter;
       }
 
-      const results = await this.vectorizeIndex.query(searchOptions);
+      const results = await this.vectorizeIndex.query(vectorArray, searchOptions);
 
       // Format results
       const formattedResults = results.matches?.map(match => ({

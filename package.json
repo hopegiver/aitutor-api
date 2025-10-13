@@ -10,7 +10,8 @@
     "deploy:dev": "wrangler deploy --env=development",
     "build": "wrangler deploy --dry-run --env=\"\"",
     "test": "node test/test-services.js",
-    "test:services": "node test/test-services.js"
+    "test:services": "node test/test-services.js",
+    "test:vectorize": "node test/test-vectorize.js"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241106.0",
