@@ -312,10 +312,11 @@ Summary Guidelines:
 - IMPORTANT: Keep the summary under 400 words
 - Start your summary with: ${language === 'ko' ? '"### 강의 내용 요약\\n\\n이 문서는 강의 영상의 핵심 내용을 요약한 교육 자료입니다."' : '"### Lecture Content Summary\\n\\nThis document summarizes the key content from the lecture video."'}
 - **CRITICAL**: Identify and include all important keywords naturally throughout the summary for better searchability
-- Structure the content systematically and concisely - organize information in a clear, logical flow
-- Use bullet points or numbered lists when appropriate to present information at a glance
-- Highlight main topics, subtopics, and key takeaways in a well-structured format
-- Make the summary easy to scan and understand quickly
+- **MUST USE STRUCTURED FORMAT**: Organize content with clear section headings and bullet points/numbered lists
+- ${language === 'ko' ? '**필수 형식**: 주요 주제별로 섹션을 나누고, 각 섹션 아래에 불릿 포인트(-)나 번호 목록으로 세부 내용을 정리하세요' : '**REQUIRED FORMAT**: Divide content into sections by main topics, and list details under each section with bullet points (-) or numbered lists'}
+- Example structure:
+  ${language === 'ko' ? '#### 1. 주제명\\n- 핵심 포인트 1\\n- 핵심 포인트 2\\n\\n#### 2. 다음 주제\\n- 핵심 포인트 1\\n- 핵심 포인트 2' : '#### 1. Topic Name\\n- Key point 1\\n- Key point 2\\n\\n#### 2. Next Topic\\n- Key point 1\\n- Key point 2'}
+- Make the summary easy to scan and understand quickly with clear visual hierarchy
 - Respond in ${language === 'ko' ? 'Korean' : 'English'} language
 
 Learning Objectives Guidelines:
