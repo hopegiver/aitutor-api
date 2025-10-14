@@ -158,11 +158,33 @@ export class ContentService {
       summary: summaryData.summary,
       objectives: summaryData.objectives || [],
       recommendedQuestions: summaryData.recommendedQuestions || [],
+      quiz: summaryData.quiz || [],
       language: summaryData.language,
       duration: summaryData.duration,
       videoUrl: summaryData.videoUrl,
       createdAt: summaryData.createdAt
     };
+  }
+
+  /**
+   * Update content summary
+   */
+  async updateContentSummary(contentId, updates) {
+    const summaryData = await this.kvService.get(KVService.contentKey('summary', contentId));
+
+    if (!summaryData) {
+      throw new Error('Content summary not found');
+    }
+
+    const updatedSummaryData = {
+      ...summaryData,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.kvService.set(KVService.contentKey('summary', contentId), updatedSummaryData);
+
+    return updatedSummaryData;
   }
 
   /**
@@ -255,7 +277,7 @@ export class ContentService {
   /**
    * Generate comprehensive educational content (summary, objectives, questions, and quiz)
    * @param {string} text - Content text to summarize
-   * @param {string} language - Language code ('ko', 'en', etc.)
+   * @param {string} language - Language code ('ko', 'en', etc.')
    */
   async generateSummary(text, language) {
     const messages = [
