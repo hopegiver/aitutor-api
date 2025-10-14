@@ -167,9 +167,9 @@ export class ContentService {
   }
 
   /**
-   * Update content summary
+   * Update summary
    */
-  async updateContentSummary(contentId, updates) {
+  async updateSummary(contentId, updates) {
     const summaryData = await this.kvService.get(KVService.contentKey('summary', contentId));
 
     if (!summaryData) {
@@ -185,6 +185,100 @@ export class ContentService {
     await this.kvService.set(KVService.contentKey('summary', contentId), updatedSummaryData);
 
     return updatedSummaryData;
+  }
+
+  /**
+   * Update status
+   */
+  async updateStatus(contentId, status) {
+    const contentData = await this.kvService.get(KVService.contentKey('info', contentId));
+
+    if (!contentData) {
+      throw new Error('Content not found');
+    }
+
+    const updatedContent = {
+      ...contentData,
+      status,
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.kvService.set(KVService.contentKey('info', contentId), updatedContent);
+    return updatedContent;
+  }
+
+  /**
+   * Update progress
+   */
+  async updateProgress(contentId, stage, percentage, message) {
+    const contentData = await this.kvService.get(KVService.contentKey('info', contentId));
+
+    if (!contentData) {
+      throw new Error('Content not found');
+    }
+
+    const updatedContent = {
+      ...contentData,
+      progress: {
+        stage,
+        percentage,
+        message
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.kvService.set(KVService.contentKey('info', contentId), updatedContent);
+    return updatedContent;
+  }
+
+  /**
+   * Set error
+   */
+  async setError(contentId, error) {
+    const contentData = await this.kvService.get(KVService.contentKey('info', contentId));
+
+    if (!contentData) {
+      throw new Error('Content not found');
+    }
+
+    const updatedContent = {
+      ...contentData,
+      status: 'failed',
+      error: {
+        message: error.message || 'Unknown error',
+        timestamp: new Date().toISOString()
+      },
+      updatedAt: new Date().toISOString(),
+      progress: {
+        stage: 'failed',
+        percentage: 0,
+        message: `Error: ${error.message || 'Unknown error'}`
+      }
+    };
+
+    await this.kvService.set(KVService.contentKey('info', contentId), updatedContent);
+    return updatedContent;
+  }
+
+  /**
+   * Set info
+   */
+  async setInfo(contentId, data) {
+    await this.kvService.set(KVService.contentKey('info', contentId), data);
+  }
+
+  /**
+   * Set subtitle
+   */
+  async setSubtitle(contentId, data) {
+    await this.kvService.set(KVService.contentKey('subtitle', contentId), data);
+  }
+
+  /**
+   * Set summary data
+   */
+  async setSummaryData(contentId, data) {
+    await this.kvService.set(KVService.contentKey('summary', contentId), data);
   }
 
   /**

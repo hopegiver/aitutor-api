@@ -217,6 +217,52 @@ content.post('/reindex/:contentId', async (c) => {
   }
 });
 
+// Regenerate captions for existing content (requires streamId)
+content.post('/recaption/:contentId', async (c) => {
+  try {
+    const { contentId } = c.req.param();
+    const body = await c.req.json();
+    const { language } = body;
+
+    if (!contentId) {
+      return c.json(createErrorResponse('Content ID is required', 400), 400);
+    }
+
+    const { contentService } = initializeServices(c.env);
+
+    // Get content info to retrieve streamId
+    const contentInfo = await contentService.kvService.get(`content:info:${contentId}`);
+
+    if (!contentInfo) {
+      return c.json(createErrorResponse('Content not found', 404), 404);
+    }
+
+    if (!contentInfo.streamId) {
+      return c.json(createErrorResponse('Stream ID not found. Cannot regenerate captions for this content.', 400), 400);
+    }
+
+    // Queue recaptioning job
+    await c.env.TRANSCRIBE_QUEUE.send({
+      contentId,
+      action: 'recaption',
+      streamId: contentInfo.streamId,
+      language: language || contentInfo.language
+    });
+
+    return c.json(createSuccessResponse({
+      contentId,
+      streamId: contentInfo.streamId,
+      status: 'queued',
+      message: 'Recaptioning job queued successfully',
+      language: language || contentInfo.language
+    }));
+
+  } catch (error) {
+    console.error('Error queueing recaption job:', error);
+    return c.json(createErrorResponse('Failed to queue recaption job', 500), 500);
+  }
+});
+
 // Generate new summary with learning objectives, recommended questions, and quiz
 content.post('/generate-summary/:contentId', async (c) => {
   try {

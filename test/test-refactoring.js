@@ -117,15 +117,14 @@ test('KVService static utility methods', () => {
   assertEqual(configKey, 'config:api-settings', 'configKey should format correctly');
 });
 
-test('KVService backward compatibility methods', () => {
+test('KVService provides generic KV operations', () => {
   const kvService = new KVService(mockEnv.AITUTOR_KV);
 
-  // Test that methods exist and can be called
-  assertNotNull(kvService.getContent, 'getContent method should exist');
-  assertNotNull(kvService.setContent, 'setContent method should exist');
-  assertNotNull(kvService.setContentInfo, 'setContentInfo method should exist');
-  assertNotNull(kvService.setContentSubtitle, 'setContentSubtitle method should exist');
-  assertNotNull(kvService.setContentSummary, 'setContentSummary method should exist');
+  // Test that generic KV methods exist
+  assertNotNull(kvService.get, 'get method should exist');
+  assertNotNull(kvService.set, 'set method should exist');
+  assertNotNull(kvService.delete, 'delete method should exist');
+  assertNotNull(kvService.list, 'list method should exist');
 });
 
 // StreamService Tests
@@ -234,6 +233,20 @@ test('ContentService integrates all required services', () => {
   // Verify that KVService can use static utility methods
   const testKey = contentService.kvService.constructor.contentKey('test', 'id');
   assertEqual(testKey, 'content:test:id', 'Static methods should work through instance');
+});
+
+test('ContentService has content-specific methods', () => {
+  const openaiService = new OpenAIService('test-key', 'test-account-id');
+  const contentService = new ContentService(mockEnv, openaiService);
+
+  // Verify that ContentService has all content-related methods
+  assertNotNull(contentService.updateStatus, 'updateStatus method should exist');
+  assertNotNull(contentService.updateProgress, 'updateProgress method should exist');
+  assertNotNull(contentService.setError, 'setError method should exist');
+  assertNotNull(contentService.setInfo, 'setInfo method should exist');
+  assertNotNull(contentService.setSubtitle, 'setSubtitle method should exist');
+  assertNotNull(contentService.setSummaryData, 'setSummaryData method should exist');
+  assertNotNull(contentService.updateSummary, 'updateSummary method should exist');
 });
 
 test('All services maintain proper constructor parameters', () => {

@@ -7,19 +7,15 @@ import { ContentService } from '../services/content.js';
 export class TranscribeConsumer {
   constructor(env) {
     this.env = env;
-    this.kvService = new KVService(env.AITUTOR_KV);
     this.streamService = new StreamService(env.CLOUDFLARE_ACCOUNT_ID, env.STREAM_API_TOKEN);
 
     this.openaiService = new OpenAIService(env.OPENAI_API_KEY, env.CLOUDFLARE_ACCOUNT_ID);
 
-    this.vectorizeService = new VectorizeService(
-      env.CONTENT_VECTORIZE,
-      this.openaiService
-    );
+    this.contentService = new ContentService(env, this.openaiService);
   }
 
   async handleMessage(message) {
-    const { contentId, action } = message;
+    const { contentId, action, streamId, language } = message;
 
     try {
       console.log(`Processing content ${contentId} with action ${action}`);
@@ -28,26 +24,29 @@ export class TranscribeConsumer {
         case 'process_video':
           await this.processVideo(contentId);
           break;
+        case 'recaption':
+          await this.recaptionVideo(contentId, streamId, language);
+          break;
         default:
           throw new Error(`Unknown action: ${action}`);
       }
 
     } catch (error) {
       console.error(`Error processing content ${contentId}:`, error);
-      await this.kvService.setContentError(contentId, error);
+      await this.contentService.setError(contentId, error);
     }
   }
 
   async processVideo(contentId) {
-    const contentData = await this.kvService.getContent(contentId);
+    const contentData = await this.contentService.kvService.get(KVService.contentKey('info', contentId));
     if (!contentData) {
       throw new Error(`Content ${contentId} not found`);
     }
 
     console.log(`Processing video for contentId: ${contentId}`);
 
-    await this.kvService.updateContentStatus(contentId, 'processing');
-    await this.kvService.updateContentProgress(contentId, 'uploading', 10, 'Uploading video to Cloudflare Stream');
+    await this.contentService.updateStatus(contentId, 'processing');
+    await this.contentService.updateProgress(contentId, 'uploading', 10, 'Uploading video to Cloudflare Stream');
 
     try {
       const streamResult = await this.streamService.uploadVideoFromUrl(contentData.videoUrl, {
@@ -57,11 +56,11 @@ export class TranscribeConsumer {
 
       const streamUid = streamResult.uid;
 
-      await this.kvService.updateContentProgress(contentId, 'processing', 30, 'Video uploaded, waiting for processing');
+      await this.contentService.updateProgress(contentId, 'processing', 30, 'Video uploaded, waiting for processing');
 
       const processedVideo = await this.streamService.waitForProcessing(streamUid);
 
-      await this.kvService.updateContentProgress(contentId, 'generating-captions', 50, 'Generating AI captions with Cloudflare Stream');
+      await this.contentService.updateProgress(contentId, 'generating-captions', 50, 'Generating AI captions with Cloudflare Stream');
 
       await this.generateStreamCaptions(contentId, streamUid);
 
@@ -71,8 +70,23 @@ export class TranscribeConsumer {
     }
   }
 
-  async generateStreamCaptions(contentId, streamUid) {
-    const contentData = await this.kvService.getContent(contentId);
+  async recaptionVideo(contentId, streamId, language) {
+    console.log(`Recaptioning video for contentId: ${contentId}, streamId: ${streamId}, language: ${language}`);
+
+    await this.contentService.updateStatus(contentId, 'processing');
+    await this.contentService.updateProgress(contentId, 'recaptioning', 10, 'Starting recaptioning process');
+
+    try {
+      // Use existing streamId, no need to upload again
+      await this.generateStreamCaptions(contentId, streamId, language);
+    } catch (error) {
+      console.error(`Error recaptioning video for content ${contentId}:`, error);
+      throw error;
+    }
+  }
+
+  async generateStreamCaptions(contentId, streamUid, languageOverride = null) {
+    const contentData = await this.contentService.kvService.get(KVService.contentKey('info', contentId));
     if (!contentData) {
       throw new Error(`Content ${contentId} not found`);
     }
@@ -81,31 +95,32 @@ export class TranscribeConsumer {
     let captionsReady = false;
 
     try {
-      const streamLanguage = this.streamService.mapLanguageCode(contentData.language);
+      // Use languageOverride if provided, otherwise use content's original language
+      const targetLanguage = languageOverride || contentData.language;
+      const streamLanguage = this.streamService.mapLanguageCode(targetLanguage);
 
-      await this.kvService.updateContentProgress(contentId, 'generating-captions', 60, `Starting AI caption generation in ${streamLanguage}`);
+      await this.contentService.updateProgress(contentId, 'generating-captions', 60, `Starting AI caption generation in ${streamLanguage}`);
 
       const captionResult = await this.streamService.generateCaptions(streamUid, streamLanguage);
       console.log(`Caption generation started for ${streamUid}:`, captionResult);
       captionsGenerated = true;
 
       const progressCallback = async (stage, percentage, message) => {
-        await this.kvService.updateContentProgress(contentId, stage, percentage, message);
+        await this.contentService.updateProgress(contentId, stage, percentage, message);
       };
 
       const captionStatus = await this.streamService.waitForCaptions(streamUid, streamLanguage, 600000, 10000, progressCallback);
       console.log(`Captions ready for ${streamUid}:`, captionStatus);
       captionsReady = true;
 
-      await this.kvService.updateContentProgress(contentId, 'downloading-captions', 85, 'Downloading generated captions');
+      await this.contentService.updateProgress(contentId, 'downloading-captions', 85, 'Downloading generated captions');
 
       const captionContent = await this.streamService.getCaptionContent(streamUid, streamLanguage);
 
-      await this.kvService.updateContentProgress(contentId, 'summarizing', 90, 'Generating AI content summary');
+      await this.contentService.updateProgress(contentId, 'summarizing', 90, 'Generating AI content summary');
 
       const plainText = this.streamService.extractPlainText(captionContent.content);
-      const contentService = new ContentService(this.env, this.openaiService);
-      const educationalContent = await contentService.generateSummary(plainText, captionContent.language);
+      const educationalContent = await this.contentService.generateSummary(plainText, captionContent.language);
 
       const summary = educationalContent.summary;
       const objectives = educationalContent.objectives || [];
@@ -115,18 +130,19 @@ export class TranscribeConsumer {
       const duration = this.streamService.extractDurationFromVTT(captionContent.content);
       const segments = this.streamService.convertVTTToSegments(captionContent.content);
 
-      await this.kvService.setContentInfo(contentId, {
+      await this.contentService.setInfo(contentId, {
         contentId,
         status: 'completed',
         language: captionContent.language,
         duration,
         videoUrl: contentData.videoUrl,
+        streamId: streamUid,
         source: 'cloudflare-stream-ai',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
 
-      await this.kvService.setContentSubtitle(contentId, {
+      await this.contentService.setSubtitle(contentId, {
         contentId,
         segments,
         language: captionContent.language,
@@ -136,7 +152,7 @@ export class TranscribeConsumer {
         createdAt: new Date().toISOString()
       });
 
-      await this.kvService.setContentSummary(contentId, {
+      await this.contentService.setSummaryData(contentId, {
         contentId,
         originalText: plainText,
         summary: summary,
@@ -149,7 +165,7 @@ export class TranscribeConsumer {
       });
 
       if (quiz && quiz.length > 0) {
-        await this.kvService.set(KVService.contentKey('quiz', contentId), {
+        await this.contentService.kvService.set(KVService.contentKey('quiz', contentId), {
           contentId,
           quiz: quiz,
           language: captionContent.language,
@@ -164,7 +180,7 @@ export class TranscribeConsumer {
       console.log(`✅ Generated ${objectives?.length || 0} learning objectives for content ${contentId}`);
       console.log(`✅ Generated ${recommendedQuestions?.length || 0} recommended questions for content ${contentId}`);
 
-      await this.kvService.updateContentProgress(contentId, 'indexing', 95, 'Indexing content for search');
+      await this.contentService.updateProgress(contentId, 'indexing', 95, 'Indexing content for search');
 
       try {
         const vectorMetadata = {
@@ -174,7 +190,7 @@ export class TranscribeConsumer {
           source: 'cloudflare-stream-ai'
         };
 
-        const indexResult = await this.vectorizeService.indexContent(
+        const indexResult = await this.contentService.vectorizeService.indexContent(
           contentId,
           summary,
           segments,
@@ -187,23 +203,13 @@ export class TranscribeConsumer {
       }
 
       console.log(`Content ${contentId} completed successfully with Stream AI captions`);
-      await this.kvService.updateContentProgress(contentId, 'completed', 100, 'Content processing completed');
+      console.log(`✅ Stream video preserved with ID: ${streamUid}`);
+      await this.contentService.updateProgress(contentId, 'completed', 100, 'Content processing completed');
 
     } catch (error) {
       console.error(`Error generating Stream captions for content ${contentId}:`, error);
-
       console.error(`Caption generation status - Generated: ${captionsGenerated}, Ready: ${captionsReady}`);
-
       throw error;
-
-    } finally {
-      try {
-        console.log(`Cleaning up video ${streamUid} from Stream...`);
-        await this.streamService.deleteVideo(streamUid);
-        console.log(`✅ Successfully cleaned up video ${streamUid} from Stream`);
-      } catch (cleanupError) {
-        console.error(`❌ Failed to delete video ${streamUid} from Stream:`, cleanupError);
-      }
     }
   }
 
@@ -212,13 +218,23 @@ export class TranscribeConsumer {
 export default async function handleQueue(batch, env) {
   const consumer = new TranscribeConsumer(env);
 
-  for (const message of batch.messages) {
-    try {
-      await consumer.handleMessage(message.body);
-      message.ack();
-    } catch (error) {
-      console.error('Failed to process queue message:', error);
-      message.retry();
-    }
-  }
+  // 병렬 처리: 모든 메시지를 동시에 처리
+  const results = await Promise.allSettled(
+    batch.messages.map(async (message) => {
+      try {
+        await consumer.handleMessage(message.body);
+        message.ack();
+        return { success: true, messageId: message.id };
+      } catch (error) {
+        console.error(`Failed to process queue message ${message.id}:`, error);
+        message.retry();
+        return { success: false, messageId: message.id, error };
+      }
+    })
+  );
+
+  // 처리 결과 로깅
+  const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+  const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length;
+  console.log(`✅ Batch processing completed: ${successful} successful, ${failed} failed out of ${batch.messages.length} messages`);
 }
