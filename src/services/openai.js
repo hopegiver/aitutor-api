@@ -20,7 +20,7 @@ export class OpenAIService {
   }
 
   // AI Tutor용 시스템 메시지 추가
-  addTutorGuidance(messages, maxTokens = 500) {
+  addTutorGuidance(messages, maxTokens = 1000) {
     const hasSystemMessage = messages.some(msg => msg.role === 'system');
 
     if (!hasSystemMessage) {
@@ -29,7 +29,7 @@ export class OpenAIService {
         content: `You are an AI tutor. Provide helpful, educational responses.
                   Be encouraging, patient, and explain concepts clearly.
                   Use examples when helpful and break down complex topics.
-                  IMPORTANT: Keep your response complete and concise within 450 tokens.`
+                  IMPORTANT: Keep your response complete and concise within 400 tokens.`
       });
     } else {
       // 기존 시스템 메시지에 튜터 모드 안내 추가
@@ -41,7 +41,7 @@ export class OpenAIService {
   }
 
   async streamChat(messages, options = {}) {
-    const maxTokens = options.maxTokens || 500;
+    const maxTokens = options.maxTokens || 1000;
 
     // AI Tutor 모드로 메시지에 튜터 안내 추가 (원본 배열 수정 방지를 위해 복사)
     const messagesWithGuidance = this.addTutorGuidance([...messages], maxTokens);

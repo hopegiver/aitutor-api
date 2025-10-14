@@ -153,32 +153,75 @@ IMPORTANT: 답변 시작 부분에 반드시 "📚 강의 내용을 기반으로
       }
     }
 
-    // Process with OpenAI
-    // For recommended questions, use non-streaming to cache the full response
+    // Process with OpenAI - all questions use real streaming
+    const stream = await openai.streamChat(enhancedMessages, options);
+
+    // For recommended questions, collect response while streaming
     if (isRecommended && lastUserMessage) {
       const contentId = options.contentId || 'general';
       const cacheKey = getCacheKey(lastUserMessage.content, contentId);
+      let fullResponse = '';
+      const decoder = new TextDecoder('utf-8', { stream: true });
+      let buffer = ''; // Buffer for incomplete lines
 
-      const response = await openai.createChatCompletion({
-        messages: enhancedMessages,
-        model: options.model || 'gpt-4o-mini',
-        temperature: options.temperature || 0.7,
-        max_tokens: options.maxTokens || 500
+      const collectingStream = new TransformStream({
+        transform(chunk, controller) {
+          // Pass through immediately
+          controller.enqueue(chunk);
+
+          // Collect text with streaming decoder and line buffering
+          try {
+            const text = decoder.decode(chunk, { stream: true });
+            buffer += text;
+
+            // Split by newlines but keep the last incomplete line in buffer
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep last incomplete line in buffer
+
+            // Process complete lines only
+            for (const line of lines) {
+              if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.choices?.[0]?.delta?.content) {
+                    fullResponse += data.choices[0].delta.content;
+                  }
+                } catch (e) {
+                  // JSON parse error - line might still be incomplete
+                }
+              }
+            }
+          } catch (e) {}
+        },
+        flush() {
+          // Process any remaining buffered line
+          if (buffer && buffer.startsWith('data: ') && !buffer.includes('[DONE]')) {
+            try {
+              const data = JSON.parse(buffer.slice(6));
+              if (data.choices?.[0]?.delta?.content) {
+                fullResponse += data.choices[0].delta.content;
+              }
+            } catch (e) {}
+          }
+
+          // Finalize decoder
+          decoder.decode(new Uint8Array(), { stream: false });
+
+          // Cache after stream completes
+          if (fullResponse) {
+            c.executionCtx.waitUntil(
+              setCachedResponse(c.env, cacheKey, fullResponse)
+            );
+          }
+        }
       });
 
-      const fullResponse = response.choices[0]?.message?.content || '';
-
-      // Cache the response
-      await setCachedResponse(c.env, cacheKey, fullResponse);
-
-      // Return as SSE stream
-      const responseStream = createTextSSEStream(fullResponse);
-      const parsedStream = parseSSEStream(responseStream);
+      const cachedStream = stream.pipeThrough(collectingStream);
+      const parsedStream = parseSSEStream(cachedStream);
       return createSSEResponse(parsedStream);
     }
 
-    // For regular questions, use real streaming
-    const stream = await openai.streamChat(enhancedMessages, options);
+    // For regular questions, just stream
     const parsedStream = parseSSEStream(stream);
     return createSSEResponse(parsedStream);
 
