@@ -1,5 +1,4 @@
 import { KVService } from './kv.js';
-import { QueueService } from './queue.js';
 import { StreamService } from './stream.js';
 import { OpenAIService } from './openai.js';
 import { VectorizeService } from './vectorize.js';
@@ -8,7 +7,6 @@ import { ContentService } from './content.js';
 export class TranscribeConsumer {
   constructor(env) {
     this.kvService = new KVService(env.AITUTOR_KV);
-    this.queueService = new QueueService(env.TRANSCRIBE_QUEUE);
     this.streamService = new StreamService(env.CLOUDFLARE_ACCOUNT_ID, env.STREAM_API_TOKEN);
 
     this.openaiService = new OpenAIService(env);
