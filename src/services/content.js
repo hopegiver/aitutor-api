@@ -253,55 +253,11 @@ export class ContentService {
   }
 
   /**
-   * Generate new summary with learning objectives and recommended questions
+   * Generate comprehensive educational content (summary, objectives, questions, and quiz)
+   * @param {string} text - Content text to summarize
+   * @param {string} language - Language code ('ko', 'en', etc.)
    */
-  async generateNewSummary(contentId) {
-    // Get original content data
-    const existingSummaryData = await this.kvService.get(KVService.contentKey('summary', contentId));
-
-    if (!existingSummaryData) {
-      throw new Error('Content not found');
-    }
-
-    if (!existingSummaryData.originalText) {
-      throw new Error('Original text not available for summary generation');
-    }
-
-    // Generate new comprehensive summary with objectives and recommended questions
-    const newEducationalContent = await this.generateSummaryOnly(
-      existingSummaryData.originalText,
-      existingSummaryData.language || 'ko'
-    );
-
-    // Update the summary data with new content
-    const updatedSummaryData = {
-      ...existingSummaryData,
-      summary: newEducationalContent.summary,
-      objectives: newEducationalContent.objectives,
-      recommendedQuestions: newEducationalContent.recommendedQuestions,
-      createdAt: new Date().toISOString(),
-      type: 'regenerated'
-    };
-
-    // Store updated summary
-    await this.kvService.set(KVService.contentKey('summary', contentId), updatedSummaryData);
-
-    return {
-      contentId,
-      summary: newEducationalContent.summary,
-      objectives: newEducationalContent.objectives,
-      recommendedQuestions: newEducationalContent.recommendedQuestions,
-      language: existingSummaryData.language,
-      videoUrl: existingSummaryData.videoUrl,
-      createdAt: updatedSummaryData.createdAt,
-      type: 'regenerated'
-    };
-  }
-
-  /**
-   * Generate comprehensive educational content (summary, objectives, questions, quiz)
-   */
-  async generateEducationalContent(text, language) {
+  async generateSummary(text, language) {
     const messages = [
       {
         role: 'system',
@@ -325,17 +281,19 @@ Response Format (MUST follow exactly):
   "quiz": [
     {"question": "question 1", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "explanation"},
     {"question": "question 2", "options": ["A", "B", "C", "D"], "answer": 1, "explanation": "explanation"},
-    {"question": "question 3", "options": ["A", "B", "C", "D"], "answer": 2, "explanation": "explanation"},
-    {"question": "question 4", "options": ["A", "B", "C", "D"], "answer": 3, "explanation": "explanation"},
-    {"question": "question 5", "options": ["A", "B", "C", "D"], "answer": 0, "explanation": "explanation"}
+    ...
   ]
 }
 
 Summary Guidelines:
-- Create a clear, organized summary that captures key concepts and learning points
+- Create a clear, well-organized summary that captures key concepts and learning points
 - IMPORTANT: Keep the summary under 400 words
 - Start your summary with: ${language === 'ko' ? '"### 강의 내용 요약\\n\\n이 문서는 강의 영상의 핵심 내용을 요약한 교육 자료입니다."' : '"### Lecture Content Summary\\n\\nThis document summarizes the key content from the lecture video."'}
-- Include relevant keywords naturally throughout the summary
+- **CRITICAL**: Identify and include all important keywords naturally throughout the summary for better searchability
+- Structure the content systematically and concisely - organize information in a clear, logical flow
+- Use bullet points or numbered lists when appropriate to present information at a glance
+- Highlight main topics, subtopics, and key takeaways in a well-structured format
+- Make the summary easy to scan and understand quickly
 - Respond in ${language === 'ko' ? 'Korean' : 'English'} language
 
 Learning Objectives Guidelines:
@@ -353,13 +311,18 @@ Recommended Questions Guidelines:
 - Questions should be naturally curious and educational
 
 Quiz Guidelines:
-- Generate exactly 5 high-quality multiple choice questions
+- **IMPORTANT**: Generate 10-20 high-quality multiple choice questions based on content length
+  - Short content (< 5 minutes): 10-12 questions
+  - Medium content (5-15 minutes): 13-16 questions
+  - Long content (> 15 minutes): 17-20 questions
 - Each question should test understanding of key concepts from the content
 - Provide 4 answer options (A, B, C, D) for each question
 - Include the correct answer index (0-3) and a brief explanation
 - Questions should be practical and educational
+- Cover a wide range of topics from the content
+- Mix difficulty levels: some easier recall questions, some deeper understanding questions
 - Avoid overly simple or overly complex questions
-- Focus on the most important concepts in the content`
+- Focus on the most important concepts and details in the content`
       },
       {
         role: 'user',
@@ -367,7 +330,7 @@ Quiz Guidelines:
 - Summary (400 words max)
 - 3 Learning objectives
 - 5 Recommended questions for learners
-- 5 Quiz questions with multiple choice answers
+- 10-20 Quiz questions with multiple choice answers (adjust quantity based on content length)
 
 Content:
 ${text}`
@@ -378,7 +341,7 @@ ${text}`
       const response = await this.openaiService.createChatCompletion({
         messages,
         model: 'gpt-4o-mini',
-        max_tokens: 2000,
+        max_tokens: 4000,
         temperature: 0.3
       });
 
@@ -411,107 +374,6 @@ ${text}`
         objectives: [],
         recommendedQuestions: [],
         quiz: []
-      };
-    }
-  }
-
-  /**
-   * Generate only summary with learning objectives and recommended questions (no quiz)
-   */
-  async generateSummaryOnly(text, language) {
-    const messages = [
-      {
-        role: 'system',
-        content: `You are an educational content creator. Generate a comprehensive summary with learning objectives and recommended questions from video transcription content.
-
-Response Format (MUST follow exactly):
-{
-  "summary": "your detailed summary here",
-  "objectives": [
-    "learning objective 1",
-    "learning objective 2",
-    "learning objective 3"
-  ],
-  "recommendedQuestions": [
-    "recommended question 1",
-    "recommended question 2",
-    "recommended question 3",
-    "recommended question 4",
-    "recommended question 5"
-  ]
-}
-
-Summary Guidelines:
-- Create a clear, organized summary that captures key concepts and learning points
-- IMPORTANT: Keep the summary under 400 words
-- Start your summary with: ${language === 'ko' ? '"### 강의 내용 요약\\n\\n이 문서는 강의 영상의 핵심 내용을 요약한 교육 자료입니다."' : '"### Lecture Content Summary\\n\\nThis document summarizes the key content from the lecture video."'}
-- Include relevant keywords naturally throughout the summary (e.g., "강의", "학습", "교육", "내용 요약" for Korean content)
-- Respond in ${language === 'ko' ? 'Korean' : 'English'} language
-
-Learning Objectives Guidelines:
-- Generate exactly 3 clear, specific learning objectives
-- Each objective should describe what learners will be able to do/understand
-- Use action verbs like ${language === 'ko' ? '"이해할 수 있다", "설명할 수 있다", "구분할 수 있다", "적용할 수 있다"' : '"understand", "explain", "identify", "apply"'}
-- ${language === 'ko' ? 'Start each objective with "이 강의를 통해" or similar phrase' : 'Start each objective with "After this lecture, students will be able to"'}
-- Focus on the most important concepts and skills from the content
-
-Recommended Questions Guidelines:
-- Generate 5 thoughtful questions that learners might ask about this content
-- Questions should encourage deeper thinking and engagement
-- Include both clarification questions and application questions
-- Make questions practical and relevant to learning
-- Questions should be naturally curious and educational`
-      },
-      {
-        role: 'user',
-        content: `Please create a comprehensive educational package from the following video transcription content:
-- Summary (400 words max)
-- 3 Learning objectives
-- 5 Recommended questions for learners
-
-Content:
-${text}`
-      }
-    ];
-
-    try {
-      const response = await this.openaiService.createChatCompletion({
-        messages,
-        model: 'gpt-4o-mini',
-        max_tokens: 1200,
-        temperature: 0.3
-      });
-
-      const responseText = response.choices[0].message.content.trim();
-
-      // Remove markdown code blocks if present
-      const cleanedResponse = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-
-      try {
-        const parsedContent = JSON.parse(cleanedResponse);
-        return {
-          summary: parsedContent.summary || 'Summary generation failed',
-          objectives: Array.isArray(parsedContent.objectives) ? parsedContent.objectives : [],
-          recommendedQuestions: Array.isArray(parsedContent.recommendedQuestions) ? parsedContent.recommendedQuestions : []
-        };
-      } catch (parseError) {
-        console.error('Error parsing comprehensive summary response:', parseError);
-
-        // Fallback: try to extract from text
-        const lines = responseText.split('\n').filter(line => line.trim());
-
-        return {
-          summary: 'Summary generation failed - please try again',
-          objectives: [],
-          recommendedQuestions: []
-        };
-      }
-    } catch (error) {
-      console.error('Error generating comprehensive summary:', error);
-      return {
-        summary: 'Summary generation failed due to API error',
-        objectives: [],
-        recommendedQuestions: []
       };
     }
   }

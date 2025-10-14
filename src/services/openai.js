@@ -1,20 +1,13 @@
 import OpenAI from 'openai';
 
 export class OpenAIService {
-  constructor(env) {
-    // env 객체 또는 기존 방식 모두 지원
-    if (typeof env === 'object' && env !== null) {
-      this.apiKey = env.OPENAI_API_KEY;
-      this.accountId = env.CLOUDFLARE_ACCOUNT_ID;
-    } else {
-      // 기존 방식 (테스트용)
-      this.apiKey = arguments[0];
-      this.accountId = arguments[1];
-    }
-
-    if (!this.apiKey || !this.accountId) {
+  constructor(apiKey, accountId) {
+    if (!apiKey || !accountId) {
       throw new Error('OpenAI API key and Cloudflare account ID are required');
     }
+
+    this.apiKey = apiKey;
+    this.accountId = accountId;
 
     // Cloudflare AI Gateway를 통한 OpenAI 접근 (하드코딩된 gateway ID 'aitutor' 사용)
     this.baseUrl = `https://gateway.ai.cloudflare.com/v1/${this.accountId}/aitutor/openai`;
@@ -156,5 +149,5 @@ export class OpenAIService {
 
 // Export a factory function for creating OpenAI service instances
 export function getOpenAIService(env) {
-  return new OpenAIService(env);
+  return new OpenAIService(env.OPENAI_API_KEY, env.CLOUDFLARE_ACCOUNT_ID);
 }

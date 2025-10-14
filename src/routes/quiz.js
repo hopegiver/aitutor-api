@@ -40,7 +40,7 @@ quiz.get('/:contentId', async (c) => {
     }
 
     // Initialize OpenAI service for dynamic quiz generation
-    const openaiService = new OpenAIService(c.env);
+    const openaiService = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID);
 
     // Generate quiz from full content
     const generatedQuiz = await generateQuizFromContent(

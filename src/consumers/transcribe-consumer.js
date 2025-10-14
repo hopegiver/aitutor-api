@@ -1,15 +1,16 @@
-import { KVService } from './kv.js';
-import { StreamService } from './stream.js';
-import { OpenAIService } from './openai.js';
-import { VectorizeService } from './vectorize.js';
-import { ContentService } from './content.js';
+import { KVService } from '../services/kv.js';
+import { StreamService } from '../services/stream.js';
+import { OpenAIService } from '../services/openai.js';
+import { VectorizeService } from '../services/vectorize.js';
+import { ContentService } from '../services/content.js';
 
 export class TranscribeConsumer {
   constructor(env) {
+    this.env = env;
     this.kvService = new KVService(env.AITUTOR_KV);
     this.streamService = new StreamService(env.CLOUDFLARE_ACCOUNT_ID, env.STREAM_API_TOKEN);
 
-    this.openaiService = new OpenAIService(env);
+    this.openaiService = new OpenAIService(env.OPENAI_API_KEY, env.CLOUDFLARE_ACCOUNT_ID);
 
     this.vectorizeService = new VectorizeService(
       env.CONTENT_VECTORIZE,
@@ -103,8 +104,8 @@ export class TranscribeConsumer {
       await this.kvService.updateContentProgress(contentId, 'summarizing', 90, 'Generating AI content summary');
 
       const plainText = this.streamService.extractPlainText(captionContent.content);
-      const contentService = new ContentService(this.env, new OpenAIService(this.env));
-      const educationalContent = await contentService.generateEducationalContent(plainText, captionContent.language);
+      const contentService = new ContentService(this.env, this.openaiService);
+      const educationalContent = await contentService.generateSummary(plainText, captionContent.language);
 
       const summary = educationalContent.summary;
       const objectives = educationalContent.objectives || [];

@@ -30,7 +30,7 @@ chat.post('/', async (c) => {
     }
 
     // Initialize services
-    const openai = new OpenAIService(c.env);
+    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID);
     const vectorize = new VectorizeService(c.env.CONTENT_VECTORIZE, openai);
 
     // Get the last user message for content search
@@ -127,7 +127,7 @@ chat.post('/simple', async (c) => {
     }
 
     // Initialize services
-    const openai = new OpenAIService(c.env);
+    const openai = new OpenAIService(c.env.OPENAI_API_KEY, c.env.CLOUDFLARE_ACCOUNT_ID);
     const vectorize = new VectorizeService(c.env.CONTENT_VECTORIZE, openai);
 
     // Search for relevant content

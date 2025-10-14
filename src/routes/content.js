@@ -28,7 +28,7 @@ const searchSchema = z.object({
 
 // Helper function to initialize services
 function initializeServices(env) {
-  const openaiService = new OpenAIService(env);
+  const openaiService = new OpenAIService(env.OPENAI_API_KEY, env.CLOUDFLARE_ACCOUNT_ID);
   const contentService = new ContentService(env, openaiService);
   return { openaiService, contentService };
 }
@@ -217,7 +217,7 @@ content.post('/reindex/:contentId', async (c) => {
   }
 });
 
-// Generate new summary with learning objectives and recommended questions
+// Generate new summary with learning objectives, recommended questions, and quiz
 content.post('/generate-summary/:contentId', async (c) => {
   try {
     const { contentId } = c.req.param();
@@ -227,17 +227,56 @@ content.post('/generate-summary/:contentId', async (c) => {
     }
 
     const { contentService } = initializeServices(c.env);
-    const result = await contentService.generateNewSummary(contentId);
+    const { KVService } = await import('../services/kv.js');
+    const kvService = new KVService(c.env.AITUTOR_KV);
+
+    // Get original content data
+    const existingSummaryData = await kvService.get(KVService.contentKey('summary', contentId));
+
+    if (!existingSummaryData) {
+      return c.json(createErrorResponse('Content not found', 404), 404);
+    }
+
+    if (!existingSummaryData.originalText) {
+      return c.json(createErrorResponse('Original text not available for summary generation', 400), 400);
+    }
+
+    // Generate new comprehensive summary with objectives, questions, and quiz
+    const newEducationalContent = await contentService.generateSummary(
+      existingSummaryData.originalText,
+      existingSummaryData.language || 'ko'
+    );
+
+    // Update the summary data with new content
+    const updatedSummaryData = {
+      ...existingSummaryData,
+      summary: newEducationalContent.summary,
+      objectives: newEducationalContent.objectives,
+      recommendedQuestions: newEducationalContent.recommendedQuestions,
+      quiz: newEducationalContent.quiz,
+      createdAt: new Date().toISOString(),
+      type: 'regenerated'
+    };
+
+    // Store updated summary
+    await kvService.set(KVService.contentKey('summary', contentId), updatedSummaryData);
+
+    const result = {
+      contentId,
+      summary: newEducationalContent.summary,
+      objectives: newEducationalContent.objectives,
+      recommendedQuestions: newEducationalContent.recommendedQuestions,
+      quiz: newEducationalContent.quiz,
+      language: existingSummaryData.language,
+      videoUrl: existingSummaryData.videoUrl,
+      createdAt: updatedSummaryData.createdAt,
+      type: 'regenerated'
+    };
+
     return c.json(createSuccessResponse(result));
 
   } catch (error) {
     console.error('Error generating new summary:', error);
-    if (error.message === 'Content not found') {
-      return c.json(createErrorResponse('Content not found', 404), 404);
-    }
-    if (error.message === 'Original text not available for summary generation') {
-      return c.json(createErrorResponse('Original text not available for summary generation', 400), 400);
-    }
     return c.json(createErrorResponse('Failed to generate new summary', 500), 500);
   }
 });

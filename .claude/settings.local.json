@@ -25,7 +25,8 @@
       "Bash(npm run:*)",
       "Bash(node:*)",
       "Bash(del \"G:\\workspace\\aitutor-api\\src\\services\\queue.js\")",
-      "Bash(del \"G:\\workspace\\aitutor-api\\src\\services\\whisper.js\")"
+      "Bash(del \"G:\\workspace\\aitutor-api\\src\\services\\whisper.js\")",
+      "Bash(git mv:*)"
     ],
     "deny": [],
     "ask": []

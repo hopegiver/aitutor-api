@@ -7,7 +7,7 @@ import auth from './routes/auth.js';
 import content from './routes/content.js';
 import { AuthService } from './utils/auth.js';
 import { createErrorResponse } from './utils/responses.js';
-import handleQueue from './services/transcribe-consumer.js';
+import handleQueue from './consumers/transcribe-consumer.js';
 
 const app = new Hono();
 
