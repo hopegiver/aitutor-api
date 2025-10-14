@@ -158,7 +158,6 @@ export class ContentService {
       summary: summaryData.summary,
       objectives: summaryData.objectives || [],
       recommendedQuestions: summaryData.recommendedQuestions || [],
-      quiz: summaryData.quiz || [],
       language: summaryData.language,
       duration: summaryData.duration,
       videoUrl: summaryData.videoUrl,
