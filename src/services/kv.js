@@ -109,6 +109,22 @@ export class KVService {
     return await this.set(KVService.contentKey('info', contentId), data);
   }
 
+  async updateContentStatus(contentId, status) {
+    const contentData = await this.getContent(contentId);
+    if (!contentData) {
+      throw new Error(`Content ${contentId} not found`);
+    }
+
+    const updatedContent = {
+      ...contentData,
+      status,
+      updatedAt: new Date().toISOString()
+    };
+
+    await this.setContent(contentId, updatedContent);
+    return updatedContent;
+  }
+
   async updateContentProgress(contentId, stage, percentage, message) {
     const contentData = await this.getContent(contentId);
     if (!contentData) {
