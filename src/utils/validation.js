@@ -68,6 +68,10 @@ export function validateOptions(options) {
       throw new Error('Max tokens must be a number between 1 and 4000');
     }
   }
+
+  if (options.isRecommended !== undefined && typeof options.isRecommended !== 'boolean') {
+    throw new Error('isRecommended must be a boolean');
+  }
 }
 
 export function sanitizeInput(input) {

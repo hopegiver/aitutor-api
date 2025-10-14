@@ -6,9 +6,64 @@ import { validateChatMessages, validateOptions, sanitizeInput } from '../utils/v
 
 const chat = new Hono();
 
+// Cache helper functions
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function normalizeQuestion(text) {
+  return text.toLowerCase().trim().replace(/[?.!,\s]+/g, ' ');
+}
+
+function getCacheKey(question, contentId = 'general') {
+  const normalized = normalizeQuestion(question);
+  const hash = hashString(normalized);
+  return `chat:cache:${contentId}:${hash}`;
+}
+
+async function getCachedResponse(env, cacheKey) {
+  try {
+    const cached = await env.AITUTOR_KV.get(cacheKey);
+    return cached ? JSON.parse(cached) : null;
+  } catch (error) {
+    console.error('Cache read error:', error);
+    return null;
+  }
+}
+
+async function setCachedResponse(env, cacheKey, response) {
+  try {
+    await env.AITUTOR_KV.put(cacheKey, JSON.stringify(response));
+  } catch (error) {
+    console.error('Cache write error:', error);
+  }
+}
+
+function createTextSSEStream(text) {
+  return new ReadableStream({
+    start(controller) {
+      const sseData = `data: ${JSON.stringify({
+        choices: [{
+          delta: { content: text }
+        }]
+      })}\n\n`;
+      controller.enqueue(new TextEncoder().encode(sseData));
+      controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+      controller.close();
+    }
+  });
+}
+
 chat.post('/', async (c) => {
   try {
     const { messages, options = {} } = await c.req.json();
+    const isRecommended = options.isRecommended || false;
 
     // Basic validation
     if (!messages || !Array.isArray(messages)) {
@@ -23,6 +78,23 @@ chat.post('/', async (c) => {
       ...msg,
       content: sanitizeInput(msg.content)
     }));
+
+    // Check for cached response (recommended questions only)
+    if (isRecommended && sanitizedMessages.length > 0) {
+      const lastMessage = sanitizedMessages[sanitizedMessages.length - 1];
+      if (lastMessage.role === 'user') {
+        const contentId = options.contentId || 'general';
+        const cacheKey = getCacheKey(lastMessage.content, contentId);
+
+        const cached = await getCachedResponse(c.env, cacheKey);
+        if (cached) {
+          // Cache hit - return as SSE stream
+          const cachedStream = createTextSSEStream(cached);
+          const parsedStream = parseSSEStream(cachedStream);
+          return createSSEResponse(parsedStream);
+        }
+      }
+    }
 
     // Check API key
     if (!c.env.OPENAI_API_KEY) {
@@ -69,40 +141,45 @@ IMPORTANT: 답변 시작 부분에 반드시 "📚 강의 내용을 기반으로
             });
           }
 
-          console.log(`✅ Found ${contextResult.relevantChunks} relevant content chunks for query`);
         } else {
-          // No relevant content found - return rejection message directly without AI processing
-          console.log('ℹ️ No relevant content found - returning rejection message directly');
-
+          // No relevant content found - return rejection message as SSE stream
           const rejectionMessage = '죄송합니다. 현재 등록된 강의 자료에서는 해당 내용을 찾을 수 없습니다. 강의 내용과 관련된 다른 질문을 해주시면 도움을 드릴 수 있습니다.';
-
-          // Create a simple SSE stream with the rejection message
-          const rejectionStream = new ReadableStream({
-            start(controller) {
-              const sseData = `data: ${JSON.stringify({
-                choices: [{
-                  delta: { content: rejectionMessage }
-                }]
-              })}\n\n`;
-              controller.enqueue(new TextEncoder().encode(sseData));
-              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-              controller.close();
-            }
-          });
-
+          const rejectionStream = createTextSSEStream(rejectionMessage);
           const parsedRejectionStream = parseSSEStream(rejectionStream);
           return createSSEResponse(parsedRejectionStream);
         }
       } catch (vectorError) {
         console.error('Vector search error (continuing without context):', vectorError);
-        // Continue without context if vector search fails
       }
     }
 
     // Process with OpenAI
+    // For recommended questions, use non-streaming to cache the full response
+    if (isRecommended && lastUserMessage) {
+      const contentId = options.contentId || 'general';
+      const cacheKey = getCacheKey(lastUserMessage.content, contentId);
+
+      const response = await openai.createChatCompletion({
+        messages: enhancedMessages,
+        model: options.model || 'gpt-4o-mini',
+        temperature: options.temperature || 0.7,
+        max_tokens: options.maxTokens || 500
+      });
+
+      const fullResponse = response.choices[0]?.message?.content || '';
+
+      // Cache the response
+      await setCachedResponse(c.env, cacheKey, fullResponse);
+
+      // Return as SSE stream
+      const responseStream = createTextSSEStream(fullResponse);
+      const parsedStream = parseSSEStream(responseStream);
+      return createSSEResponse(parsedStream);
+    }
+
+    // For regular questions, use real streaming
     const stream = await openai.streamChat(enhancedMessages, options);
     const parsedStream = parseSSEStream(stream);
-
     return createSSEResponse(parsedStream);
 
   } catch (error) {
@@ -149,34 +226,15 @@ IMPORTANT: 답변 시작 부분에 반드시 "📚 강의 내용을 기반으로
           enhancedSystemPrompt = enhancedSystemPrompt
             ? enhancedSystemPrompt + '\n\n' + contextPrompt
             : contextPrompt;
-
-          console.log(`✅ Found ${contextResult.relevantChunks} relevant content chunks for simple chat`);
         } else {
-          // No relevant content found - return rejection message directly without AI processing
-          console.log('ℹ️ No relevant content found in simple chat - returning rejection message directly');
-
+          // No relevant content found - return rejection message as SSE stream
           const rejectionMessage = '죄송합니다. 현재 등록된 강의 자료에서는 해당 내용을 찾을 수 없습니다. 강의 내용과 관련된 다른 질문을 해주시면 도움을 드릴 수 있습니다.';
-
-          // Create a simple SSE stream with the rejection message
-          const rejectionStream = new ReadableStream({
-            start(controller) {
-              const sseData = `data: ${JSON.stringify({
-                choices: [{
-                  delta: { content: rejectionMessage }
-                }]
-              })}\n\n`;
-              controller.enqueue(new TextEncoder().encode(sseData));
-              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-              controller.close();
-            }
-          });
-
+          const rejectionStream = createTextSSEStream(rejectionMessage);
           const parsedRejectionStream = parseSSEStream(rejectionStream);
           return createSSEResponse(parsedRejectionStream);
         }
       } catch (vectorError) {
         console.error('Vector search error in simple chat (continuing without context):', vectorError);
-        // Continue without context if vector search fails
       }
     }
 
