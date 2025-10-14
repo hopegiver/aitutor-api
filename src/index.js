@@ -1,7 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import chat from './routes/chat.js';
-import quiz from './routes/quiz.js';
 import docs from './routes/docs.js';
 import auth from './routes/auth.js';
 import content from './routes/content.js';
@@ -100,7 +99,6 @@ app.route('/docs', docs);
 // API Routes
 app.route('/v1/auth', auth);
 app.route('/v1/chat', chat);
-app.route('/v1/quiz', quiz);
 app.route('/v1/content', content);
 
 // 404 handler
