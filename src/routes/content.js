@@ -146,7 +146,7 @@ content.get('/subtitle/:contentId', async (c) => {
   }
 });
 
-// Search content using vectorized search
+// Search content using vectorized search (POST only to support Korean characters)
 content.post('/search', async (c) => {
   try {
     const { query, topK = 10, contentId, type, language } = await c.req.json();

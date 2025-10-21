@@ -94,6 +94,9 @@ export class VectorizeService {
     try {
       const vectors = [];
 
+      // Ensure contentId is always stored as string for consistent filtering
+      const contentIdString = String(contentId);
+
       // Use segment-based chunking with smart merging for better timestamps
       const transcriptChunks = this.createSegmentBasedChunks(segments, 200, 500);
 
@@ -102,10 +105,10 @@ export class VectorizeService {
         const embedding = await this.generateEmbedding(chunk.text);
 
         vectors.push({
-          id: `${contentId}-transcript-${i}`,
-          values: embedding,
+          id: `${contentIdString}-transcript-${i}`,
+          values: embedding, // Keep as plain array for better serialization compatibility
           metadata: {
-            contentId,
+            contentId: contentIdString,
             type: 'transcript',
             text: chunk.text,
             chunkIndex: i,
@@ -123,10 +126,10 @@ export class VectorizeService {
       if (summary && summary.trim().length > 0) {
         const summaryEmbedding = await this.generateEmbedding(summary);
         vectors.push({
-          id: `${contentId}-summary`,
-          values: summaryEmbedding,
+          id: `${contentIdString}-summary`,
+          values: summaryEmbedding, // Keep as plain array for better serialization compatibility
           metadata: {
-            contentId,
+            contentId: contentIdString,
             type: 'summary',
             text: summary,
             chunkIndex: -1, // Special index for summary
@@ -185,13 +188,15 @@ export class VectorizeService {
         };
       }
 
-      // Convert to plain array for Vectorize query (required fix)
-      const vectorArray = Array.isArray(queryEmbedding) ? Array.from(queryEmbedding) : queryEmbedding;
+      // Convert to Float32Array for optimal Vectorize performance
+      const vectorArray = queryEmbedding instanceof Float32Array
+        ? queryEmbedding
+        : new Float32Array(queryEmbedding);
 
       // Build filter conditions
       const filter = {};
-      // Temporarily disable contentId filtering until metadata index is fully active
-      // if (contentId) filter.contentId = contentId;
+      // Ensure contentId is converted to string for consistent filtering
+      if (contentId) filter.contentId = String(contentId);
       if (type) filter.type = type;
       if (language) filter.language = language;
 
@@ -224,9 +229,10 @@ export class VectorizeService {
 
       // Client-side filtering as fallback (in case metadata index is not ready)
       if (contentId && formattedResults.length > 0) {
-        console.log(`🔍 Filtering results by contentId: ${contentId}`);
+        const contentIdString = String(contentId);
+        console.log(`🔍 Filtering results by contentId: ${contentIdString}`);
         console.log(`📊 Total results before filtering: ${formattedResults.length}`);
-        const filteredByContentId = formattedResults.filter(result => result.contentId === contentId);
+        const filteredByContentId = formattedResults.filter(result => String(result.contentId) === contentIdString);
         console.log(`📊 Filtered results: ${filteredByContentId.length}`);
         if (filteredByContentId.length > 0) {
           formattedResults = filteredByContentId;
@@ -352,10 +358,13 @@ export class VectorizeService {
    */
   async deleteContent(contentId) {
     try {
+      // Ensure contentId is string for consistent filtering
+      const contentIdString = String(contentId);
+
       // Note: Vectorize doesn't have a direct delete by metadata filter
       // We need to search first, then delete by IDs
       const searchResults = await this.searchContent('', {
-        contentId,
+        contentId: contentIdString,
         topK: 1000 // Get all chunks for this content
       });
 
@@ -363,13 +372,13 @@ export class VectorizeService {
 
       if (vectorIds.length > 0) {
         await this.vectorizeIndex.deleteByIds(vectorIds);
-        console.log(`✅ Deleted ${vectorIds.length} vectors for content ${contentId}`);
+        console.log(`✅ Deleted ${vectorIds.length} vectors for content ${contentIdString}`);
       }
 
       return { deleted: vectorIds.length };
 
     } catch (error) {
-      console.error(`Error deleting content ${contentId}:`, error);
+      console.error(`Error deleting content ${contentIdString}:`, error);
       throw error;
     }
   }
